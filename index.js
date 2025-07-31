@@ -11,12 +11,11 @@ export class EmailEngineClient {
         this.messages = [];
         this.nextPageCursor = null;
         this.prevPageCursor = null;
-        
+
         // Get page size from localStorage or options or default
-        const savedPageSize = typeof window !== 'undefined' && window.localStorage 
-            ? localStorage.getItem('ee-client-page-size') 
-            : null;
-        this.pageSize = savedPageSize ? parseInt(savedPageSize) : (options.pageSize || 20);
+        const savedPageSize =
+            typeof window !== 'undefined' && window.localStorage ? localStorage.getItem('ee-client-page-size') : null;
+        this.pageSize = savedPageSize ? parseInt(savedPageSize) : options.pageSize || 20;
 
         if (this.container) {
             this.init();
@@ -254,10 +253,12 @@ export class EmailEngineClient {
     }
 
     formatFileSize(bytes) {
-        if (!bytes) return '';
+        if (!bytes) {
+            return '';
+        }
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+        return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
     }
 
     async downloadAttachment(attachmentId, suggestedFilename = null) {
@@ -266,7 +267,7 @@ export class EmailEngineClient {
             if (this.accessToken) {
                 headers['Authorization'] = `Bearer ${this.accessToken}`;
             }
-            
+
             const response = await fetch(`${this.apiUrl}/v1/account/${this.account}/attachment/${attachmentId}`, {
                 headers,
                 credentials: 'include'
@@ -310,7 +311,7 @@ export class EmailEngineClient {
             if (this.accessToken) {
                 headers['Authorization'] = `Bearer ${this.accessToken}`;
             }
-            
+
             const response = await fetch(`${this.apiUrl}/v1/account/${this.account}/message/${messageId}/source`, {
                 headers,
                 credentials: 'include'
@@ -900,10 +901,14 @@ export class EmailEngineClient {
             <div class="ee-pane-header">
                 <span class="ee-pane-title">Messages</span>
                 <div class="ee-pagination-controls">
-                    ${hasPagination ? `
+                    ${
+                        hasPagination
+                            ? `
                         ${this.prevPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="prev-page">← Previous</button>` : ''}
                         ${this.nextPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="next-page">Next →</button>` : ''}
-                    ` : ''}
+                    `
+                            : ''
+                    }
                     <div class="ee-page-size-selector">
                         <span class="ee-page-size-label">Show:</span>
                         <select class="ee-page-size-select" data-action="page-size">
@@ -959,7 +964,7 @@ export class EmailEngineClient {
 
         const pageSizeSelect = messageList.querySelector('[data-action="page-size"]');
         if (pageSizeSelect) {
-            pageSizeSelect.addEventListener('change', (e) => {
+            pageSizeSelect.addEventListener('change', e => {
                 this.pageSize = parseInt(e.target.value);
                 // Save to localStorage
                 if (typeof window !== 'undefined' && window.localStorage) {
@@ -1036,10 +1041,14 @@ export class EmailEngineClient {
                 <div class="ee-message-body">
                     ${msg.text && msg.text.html ? msg.text.html : msg.text && msg.text.plain ? `<pre>${msg.text.plain}</pre>` : ''}
                 </div>
-                ${msg.attachments && msg.attachments.length > 0 ? `
+                ${
+                    msg.attachments && msg.attachments.length > 0
+                        ? `
                     <div class="ee-attachments">
                         <div class="ee-attachments-title">Attachments (${msg.attachments.length})</div>
-                        ${msg.attachments.map(att => `
+                        ${msg.attachments
+                            .map(
+                                att => `
                             <div class="ee-attachment-item" data-attachment-id="${att.id}">
                                 <div class="ee-attachment-icon">📎</div>
                                 <div class="ee-attachment-info">
@@ -1047,9 +1056,13 @@ export class EmailEngineClient {
                                     ${att.size ? `<div class="ee-attachment-size">${this.formatFileSize(att.size)}</div>` : ''}
                                 </div>
                             </div>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </div>
-                ` : ''}
+                `
+                        : ''
+                }
             </div>
         `;
         viewer.innerHTML = html;
@@ -1122,17 +1135,19 @@ export class EmailEngineClient {
 
         this.createStyles();
         this.createLayout();
-        this.loadFolders().then(() => {
-            const inbox =
-                this.folders.find(f => f.specialUse && f.specialUse.includes('\\Inbox')) ||
-                this.folders.find(f => f.name.toLowerCase() === 'inbox') ||
-                this.folders[0];
-            if (inbox) {
-                this.loadMessages(inbox.path);
-            }
-        }).catch(error => {
-            console.error('Failed to auto-select inbox:', error);
-        });
+        this.loadFolders()
+            .then(() => {
+                const inbox =
+                    this.folders.find(f => f.specialUse && f.specialUse.includes('\\Inbox')) ||
+                    this.folders.find(f => f.name.toLowerCase() === 'inbox') ||
+                    this.folders[0];
+                if (inbox) {
+                    this.loadMessages(inbox.path);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to auto-select inbox:', error);
+            });
     }
 }
 
