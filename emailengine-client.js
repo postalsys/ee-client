@@ -1,4 +1,4 @@
-(function(window) {
+(function (window) {
     'use strict';
 
     class EmailEngineClient {
@@ -7,14 +7,14 @@
             this.account = options.account;
             this.accessToken = options.accessToken;
             this.container = options.container;
-            
+
             this.currentFolder = null;
             this.currentMessage = null;
             this.folders = [];
             this.messages = [];
             this.nextPageCursor = null;
             this.prevPageCursor = null;
-            
+
             this.init();
         }
 
@@ -26,21 +26,21 @@
                     'Content-Type': 'application/json'
                 }
             };
-            
+
             // Only add Authorization header if access token is provided
             if (this.accessToken) {
                 options.headers['Authorization'] = `Bearer ${this.accessToken}`;
             }
-            
+
             if (data) {
                 options.body = JSON.stringify(data);
             }
-            
+
             const response = await fetch(url, options);
             if (!response.ok) {
                 throw new Error(`API request failed: ${response.statusText}`);
             }
-            
+
             return await response.json();
         }
 
@@ -57,13 +57,13 @@
         async loadMessages(path, cursor = null) {
             const messageList = this.container.querySelector('.ee-message-list');
             messageList.innerHTML = '<div class="ee-loading">Loading messages...</div>';
-            
+
             try {
                 const params = new URLSearchParams({ path: path, pageSize: 50 });
                 if (cursor) {
                     params.set('cursor', cursor);
                 }
-                
+
                 const data = await this.apiRequest('GET', `/v1/account/${this.account}/messages?${params}`);
                 this.messages = data.messages || [];
                 this.currentFolder = path;
@@ -79,25 +79,25 @@
         async loadMessage(messageId) {
             const viewer = this.container.querySelector('.ee-message-viewer');
             viewer.innerHTML = '<div class="ee-loading">Loading message...</div>';
-            
+
             try {
-                const params = new URLSearchParams({ 
+                const params = new URLSearchParams({
                     webSafeHtml: true,
-                    markAsSeen: true  // Automatically mark as seen when viewing
+                    markAsSeen: true // Automatically mark as seen when viewing
                 });
                 const data = await this.apiRequest('GET', `/v1/account/${this.account}/message/${messageId}?${params}`);
                 this.currentMessage = data;
-                
+
                 // Since we used markAsSeen=true, the message is now seen on the server
                 // Update both local states to reflect this
                 this.currentMessage.unseen = false;
-                
+
                 const msg = this.messages.find(m => m.id === messageId);
                 if (msg) {
                     msg.unseen = false;
                     this.renderMessageList();
                 }
-                
+
                 this.renderMessage();
             } catch (error) {
                 console.error('Failed to load message:', error);
@@ -112,21 +112,19 @@
                 button.disabled = true;
                 button.textContent = 'Updating...';
             }
-            
+
             try {
-                const flagUpdate = seen 
-                    ? { flags: { add: ['\\Seen'] } }
-                    : { flags: { delete: ['\\Seen'] } };
-                
+                const flagUpdate = seen ? { flags: { add: ['\\Seen'] } } : { flags: { delete: ['\\Seen'] } };
+
                 await this.apiRequest('PUT', `/v1/account/${this.account}/message/${messageId}`, flagUpdate);
-                
+
                 // Update local message state
                 const msg = this.messages.find(m => m.id === messageId);
                 if (msg) {
                     msg.unseen = !seen;
                     this.renderMessageList();
                 }
-                
+
                 // If marking as unseen, de-select the message to avoid marking it seen again
                 if (!seen) {
                     this.currentMessage = null;
@@ -154,7 +152,7 @@
                 button.disabled = true;
                 button.textContent = 'Deleting...';
             }
-            
+
             try {
                 await this.apiRequest('DELETE', `/v1/account/${this.account}/message/${messageId}`);
                 // Remove from local messages
@@ -177,14 +175,14 @@
         async moveMessage(messageId, targetPath) {
             const select = this.container.querySelector('[data-action="move"]');
             let originalHTML = '';
-            
+
             if (select) {
                 select.disabled = true;
                 // Save original options
                 originalHTML = select.innerHTML;
                 select.innerHTML = '<option>Moving...</option>';
             }
-            
+
             try {
                 await this.apiRequest('PUT', `/v1/account/${this.account}/message/${messageId}/move`, {
                     path: targetPath
@@ -211,10 +209,12 @@
             const date = new Date(dateStr);
             const now = new Date();
             const diff = now - date;
-            
-            if (diff < 86400000) { // Less than 24 hours
+
+            if (diff < 86400000) {
+                // Less than 24 hours
                 return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            } else if (diff < 604800000) { // Less than 7 days
+            } else if (diff < 604800000) {
+                // Less than 7 days
                 return date.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
             } else {
                 return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -497,8 +497,10 @@
         }
 
         calculateFolderDepth(folder) {
-            if (!folder.parentPath || !folder.delimiter) {return 0;}
-            
+            if (!folder.parentPath || !folder.delimiter) {
+                return 0;
+            }
+
             // Count the number of delimiter characters in the path to determine depth
             const pathParts = folder.path.split(folder.delimiter);
             return Math.max(0, pathParts.length - 1);
@@ -508,7 +510,7 @@
             // First, separate special use folders from regular folders
             const specialFolders = [];
             const regularFolders = [];
-            
+
             this.folders.forEach(folder => {
                 if (folder.specialUse) {
                     specialFolders.push(folder);
@@ -516,30 +518,46 @@
                     regularFolders.push(folder);
                 }
             });
-            
+
             // Debug logging
-            console.log('All folders:', this.folders.map(f => `${f.name} (path: ${f.path}, parent: ${f.parentPath}, delimiter: ${f.delimiter})`));
-            console.log('Regular folders for hierarchy:', regularFolders.map(f => `${f.name} (path: ${f.path}, parent: ${f.parentPath})`));
-            
+            console.log(
+                'All folders:',
+                this.folders.map(f => `${f.name} (path: ${f.path}, parent: ${f.parentPath}, delimiter: ${f.delimiter})`)
+            );
+            console.log(
+                'Regular folders for hierarchy:',
+                regularFolders.map(f => `${f.name} (path: ${f.path}, parent: ${f.parentPath})`)
+            );
+
             // Sort special folders in logical order
             const specialOrder = ['\\Inbox', '\\Drafts', '\\Sent', '\\Trash', '\\Junk', '\\Archive'];
             specialFolders.sort((a, b) => {
                 // INBOX always first
-                if (a.specialUse === '\\Inbox' || a.name.toLowerCase() === 'inbox') {return -1;}
-                if (b.specialUse === '\\Inbox' || b.name.toLowerCase() === 'inbox') {return 1;}
-                
+                if (a.specialUse === '\\Inbox' || a.name.toLowerCase() === 'inbox') {
+                    return -1;
+                }
+                if (b.specialUse === '\\Inbox' || b.name.toLowerCase() === 'inbox') {
+                    return 1;
+                }
+
                 const aIndex = specialOrder.indexOf(a.specialUse);
                 const bIndex = specialOrder.indexOf(b.specialUse);
-                if (aIndex !== -1 && bIndex !== -1) {return aIndex - bIndex;}
-                if (aIndex !== -1) {return -1;}
-                if (bIndex !== -1) {return 1;}
+                if (aIndex !== -1 && bIndex !== -1) {
+                    return aIndex - bIndex;
+                }
+                if (aIndex !== -1) {
+                    return -1;
+                }
+                if (bIndex !== -1) {
+                    return 1;
+                }
                 return a.name.localeCompare(b.name);
             });
-            
+
             // Build hierarchical tree for regular folders
             const buildHierarchy = (folders, parentPath = null, depth = 0) => {
                 const result = [];
-                
+
                 // Find direct children of this parent
                 const children = folders.filter(f => {
                     if (parentPath === null) {
@@ -550,56 +568,60 @@
                         return f.parentPath === parentPath;
                     }
                 });
-                
+
                 // Debug logging
                 if (depth < 3) {
-                    console.log(`Level ${depth}, Parent: ${parentPath || 'ROOT'}, Found children:`, 
-                               children.map(c => `${c.name} (path: ${c.path}, parent: ${c.parentPath})`));
+                    console.log(
+                        `Level ${depth}, Parent: ${parentPath || 'ROOT'}, Found children:`,
+                        children.map(c => `${c.name} (path: ${c.path}, parent: ${c.parentPath})`)
+                    );
                 }
-                
+
                 children.sort((a, b) => a.name.localeCompare(b.name));
-                
+
                 children.forEach(folder => {
                     result.push(folder);
                     // Recursively add children immediately after parent
                     result.push(...buildHierarchy(folders, folder.path, depth + 1));
                 });
-                
+
                 return result;
             };
-            
+
             const hierarchicalRegular = buildHierarchy(regularFolders);
-            
+
             // Combine special folders first, then hierarchical regular folders
             return [...specialFolders, ...hierarchicalRegular];
         }
 
         renderFolderList() {
             const sidebar = this.container.querySelector('.ee-sidebar');
-            
+
             const sortedFolders = this.buildFolderTree();
-            
+
             const html = `
                 <ul class="ee-folder-list">
-                    ${sortedFolders.map(folder => {
-                        const depth = this.calculateFolderDepth(folder);
-                        const hasChildren = this.folders.some(f => f.parentPath === folder.path);
-                        return `
+                    ${sortedFolders
+                        .map(folder => {
+                            const depth = this.calculateFolderDepth(folder);
+                            const hasChildren = this.folders.some(f => f.parentPath === folder.path);
+                            return `
                             <li class="ee-folder-item ${folder.path === this.currentFolder ? 'active' : ''}" 
                                 data-path="${folder.path}" 
                                 data-depth="${depth}">
-                                <div class="ee-folder-content" style="padding-left: ${8 + (depth * 12)}px;">
+                                <div class="ee-folder-content" style="padding-left: ${8 + depth * 12}px;">
                                     ${depth > 0 ? '<span class="ee-folder-indent">└ </span>' : ''}
                                     <span class="ee-folder-name ${hasChildren ? 'has-children' : ''}">${folder.name}</span>
                                     ${folder.status && folder.status.messages > 0 ? `<span class="ee-folder-count">${folder.status.messages}</span>` : ''}
                                 </div>
                             </li>
                         `;
-                    }).join('')}
+                        })
+                        .join('')}
                 </ul>
             `;
             sidebar.innerHTML = html;
-            
+
             // Add click handlers
             sidebar.querySelectorAll('.ee-folder-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -611,23 +633,28 @@
 
         renderMessageList() {
             const messageList = this.container.querySelector('.ee-message-list');
-            
+
             if (!this.messages.length) {
                 messageList.innerHTML = '<div class="ee-empty-state">No messages</div>';
                 return;
             }
-            
-            const paginationHtml = (this.nextPageCursor || this.prevPageCursor) ? `
+
+            const paginationHtml =
+                this.nextPageCursor || this.prevPageCursor
+                    ? `
                 <div class="ee-pagination">
                     ${this.prevPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="prev-page">← Previous</button>` : ''}
                     ${this.nextPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="next-page">Next →</button>` : ''}
                 </div>
-            ` : '';
-            
+            `
+                    : '';
+
             const html = `
                 ${paginationHtml}
                 <div class="ee-message-items">
-                    ${this.messages.map(msg => `
+                    ${this.messages
+                        .map(
+                            msg => `
                         <div class="ee-message-item ${msg.unseen ? 'unread' : ''} ${msg.id === (this.currentMessage && this.currentMessage.id) ? 'active' : ''}" data-id="${msg.id}">
                             <div class="ee-message-header">
                                 <span class="ee-message-from">${msg.from ? msg.from.name || msg.from.address : 'Unknown'}</span>
@@ -636,12 +663,14 @@
                             <div class="ee-message-subject">${msg.subject || '(no subject)'}</div>
                             <div class="ee-message-preview">${msg.intro || ''}</div>
                         </div>
-                    `).join('')}
+                    `
+                        )
+                        .join('')}
                 </div>
                 ${paginationHtml}
             `;
             messageList.innerHTML = html;
-            
+
             // Add click handlers for messages
             messageList.querySelectorAll('.ee-message-item').forEach(item => {
                 item.addEventListener('click', () => {
@@ -649,14 +678,14 @@
                     this.loadMessage(messageId);
                 });
             });
-            
+
             // Add click handlers for pagination
             messageList.querySelectorAll('[data-action="prev-page"]').forEach(btn => {
                 btn.addEventListener('click', () => {
                     this.loadMessages(this.currentFolder, this.prevPageCursor);
                 });
             });
-            
+
             messageList.querySelectorAll('[data-action="next-page"]').forEach(btn => {
                 btn.addEventListener('click', () => {
                     this.loadMessages(this.currentFolder, this.nextPageCursor);
@@ -670,7 +699,7 @@
                 viewer.innerHTML = '<div class="ee-empty-state">Select a message to view</div>';
                 return;
             }
-            
+
             const msg = this.currentMessage;
             const isUnseen = msg.unseen;
             const html = `
@@ -679,12 +708,14 @@
                     <button class="ee-button" data-action="delete">Delete</button>
                     <select class="ee-button" data-action="move">
                         <option value="">Move to...</option>
-                        ${this.buildFolderTree().map(folder => {
-                            const depth = this.calculateFolderDepth(folder);
-                            const indent = '　'.repeat(depth); // Using full-width space for better alignment
-                            const prefix = depth > 0 ? '└ ' : '';
-                            return `<option value="${folder.path}" ${folder.path === this.currentFolder ? 'disabled' : ''}>${indent}${prefix}${folder.name}</option>`;
-                        }).join('')}
+                        ${this.buildFolderTree()
+                            .map(folder => {
+                                const depth = this.calculateFolderDepth(folder);
+                                const indent = '　'.repeat(depth); // Using full-width space for better alignment
+                                const prefix = depth > 0 ? '└ ' : '';
+                                return `<option value="${folder.path}" ${folder.path === this.currentFolder ? 'disabled' : ''}>${indent}${prefix}${folder.name}</option>`;
+                            })
+                            .join('')}
                     </select>
                 </div>
                 <div class="ee-message-content">
@@ -697,12 +728,16 @@
                             <span class="ee-message-meta-label">To:</span>
                             ${msg.to ? msg.to.map(t => `${t.name || ''} &lt;${t.address}&gt;`).join(', ') : ''}
                         </div>
-                        ${msg.cc && msg.cc.length ? `
+                        ${
+                            msg.cc && msg.cc.length
+                                ? `
                             <div class="ee-message-meta-row">
                                 <span class="ee-message-meta-label">Cc:</span>
                                 ${msg.cc.map(c => `${c.name || ''} &lt;${c.address}&gt;`).join(', ')}
                             </div>
-                        ` : ''}
+                        `
+                                : ''
+                        }
                         <div class="ee-message-meta-row">
                             <span class="ee-message-meta-label">Date:</span>
                             ${new Date(msg.date).toLocaleString()}
@@ -713,25 +748,25 @@
                         </div>
                     </div>
                     <div class="ee-message-body">
-                        ${msg.text && msg.text.html ? msg.text.html : (msg.text && msg.text.plain ? `<pre>${msg.text.plain}</pre>` : '')}
+                        ${msg.text && msg.text.html ? msg.text.html : msg.text && msg.text.plain ? `<pre>${msg.text.plain}</pre>` : ''}
                     </div>
                 </div>
             `;
             viewer.innerHTML = html;
-            
+
             // Add action handlers
             viewer.querySelector('[data-action="toggle-read"]').addEventListener('click', () => {
                 const currentlyUnseen = msg.unseen;
-                this.markAsRead(msg.id, currentlyUnseen);  // if unseen, mark as seen (true), if seen mark as unseen (false)
+                this.markAsRead(msg.id, currentlyUnseen); // if unseen, mark as seen (true), if seen mark as unseen (false)
             });
-            
+
             viewer.querySelector('[data-action="delete"]').addEventListener('click', () => {
                 if (confirm('Delete this message?')) {
                     this.deleteMessage(msg.id);
                 }
             });
-            
-            viewer.querySelector('[data-action="move"]').addEventListener('change', (e) => {
+
+            viewer.querySelector('[data-action="move"]').addEventListener('change', e => {
                 const targetPath = e.target.value;
                 if (targetPath) {
                     this.moveMessage(msg.id, targetPath);
@@ -759,12 +794,12 @@
             this.createStyles();
             this.createLayout();
             this.loadFolders();
-            
+
             // Load inbox by default
             setTimeout(() => {
-                const inbox = this.folders.find(f => 
-                    f.specialUse === '\\Inbox' || f.name.toLowerCase() === 'inbox'
-                ) || this.folders[0];
+                const inbox =
+                    this.folders.find(f => f.specialUse === '\\Inbox' || f.name.toLowerCase() === 'inbox') ||
+                    this.folders[0];
                 if (inbox) {
                     this.loadMessages(inbox.path);
                 }
@@ -773,7 +808,7 @@
     }
 
     // Public API
-    window.EmailEngineClient = function(options) {
+    window.EmailEngineClient = function (options) {
         if (typeof options === 'string') {
             // If a string is passed, assume it's the container ID
             options = {
@@ -788,20 +823,19 @@
             // If containerId is specified
             options.container = document.getElementById(options.containerId);
         }
-        
+
         if (!options.container) {
             throw new Error('Container element not found');
         }
-        
+
         if (!options.apiUrl) {
             console.warn('No API URL specified, using default http://127.0.0.1:3000');
         }
-        
+
         if (!options.account) {
             throw new Error('Account identifier is required');
         }
-        
+
         return new EmailEngineClient(options);
     };
-
 })(window);

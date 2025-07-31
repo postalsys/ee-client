@@ -4,14 +4,14 @@ export class EmailEngineClient {
         this.account = options.account;
         this.accessToken = options.accessToken;
         this.container = options.container;
-        
+
         this.currentFolder = null;
         this.currentMessage = null;
         this.folders = [];
         this.messages = [];
         this.nextPageCursor = null;
         this.prevPageCursor = null;
-        
+
         if (this.container) {
             this.init();
         }
@@ -25,34 +25,36 @@ export class EmailEngineClient {
                 'Content-Type': 'application/json'
             }
         };
-        
+
         if (this.accessToken) {
             options.headers['Authorization'] = `Bearer ${this.accessToken}`;
         }
-        
+
         if (data) {
             options.body = JSON.stringify(data);
         }
-        
+
         let fetchFn = globalThis.fetch;
         if (!fetchFn && typeof require !== 'undefined') {
             try {
                 const nodeFetch = await import('node-fetch');
                 fetchFn = nodeFetch.default;
             } catch (err) {
-                throw new Error('fetch is not available. In Node.js environments, please install node-fetch: npm install node-fetch');
+                throw new Error(
+                    'fetch is not available. In Node.js environments, please install node-fetch: npm install node-fetch'
+                );
             }
         }
-        
+
         if (!fetchFn) {
             throw new Error('fetch is not available');
         }
-        
+
         const response = await fetchFn(url, options);
         if (!response.ok) {
             throw new Error(`API request failed: ${response.statusText}`);
         }
-        
+
         return await response.json();
     }
 
@@ -77,23 +79,23 @@ export class EmailEngineClient {
                 messageList.innerHTML = '<div class="ee-loading">Loading messages...</div>';
             }
         }
-        
+
         try {
             const params = new URLSearchParams({ path: path, pageSize: 50 });
             if (cursor) {
                 params.set('cursor', cursor);
             }
-            
+
             const data = await this.apiRequest('GET', `/v1/account/${this.account}/messages?${params}`);
             this.messages = data.messages || [];
             this.currentFolder = path;
             this.nextPageCursor = data.nextPageCursor || null;
             this.prevPageCursor = data.prevPageCursor || null;
-            
+
             if (this.container) {
                 this.renderMessageList();
             }
-            
+
             return {
                 messages: this.messages,
                 nextPageCursor: this.nextPageCursor,
@@ -118,17 +120,17 @@ export class EmailEngineClient {
                 viewer.innerHTML = '<div class="ee-loading">Loading message...</div>';
             }
         }
-        
+
         try {
-            const params = new URLSearchParams({ 
+            const params = new URLSearchParams({
                 webSafeHtml: true,
                 markAsSeen: true
             });
             const data = await this.apiRequest('GET', `/v1/account/${this.account}/message/${messageId}?${params}`);
             this.currentMessage = data;
-            
+
             this.currentMessage.unseen = false;
-            
+
             const msg = this.messages.find(m => m.id === messageId);
             if (msg) {
                 msg.unseen = false;
@@ -136,11 +138,11 @@ export class EmailEngineClient {
                     this.renderMessageList();
                 }
             }
-            
+
             if (this.container) {
                 this.renderMessage();
             }
-            
+
             return this.currentMessage;
         } catch (error) {
             console.error('Failed to load message:', error);
@@ -156,12 +158,10 @@ export class EmailEngineClient {
 
     async markAsRead(messageId, seen = true) {
         try {
-            const flagUpdate = seen 
-                ? { flags: { add: ['\\Seen'] } }
-                : { flags: { delete: ['\\Seen'] } };
-            
+            const flagUpdate = seen ? { flags: { add: ['\\Seen'] } } : { flags: { delete: ['\\Seen'] } };
+
             await this.apiRequest('PUT', `/v1/account/${this.account}/message/${messageId}`, flagUpdate);
-            
+
             const msg = this.messages.find(m => m.id === messageId);
             if (msg) {
                 msg.unseen = !seen;
@@ -169,14 +169,14 @@ export class EmailEngineClient {
                     this.renderMessageList();
                 }
             }
-            
+
             if (this.currentMessage && this.currentMessage.id === messageId) {
                 this.currentMessage.unseen = !seen;
                 if (this.container) {
                     this.renderMessage();
                 }
             }
-            
+
             return true;
         } catch (error) {
             console.error('Failed to update message flags:', error);
@@ -187,19 +187,19 @@ export class EmailEngineClient {
     async deleteMessage(messageId) {
         try {
             await this.apiRequest('DELETE', `/v1/account/${this.account}/message/${messageId}`);
-            
+
             this.messages = this.messages.filter(m => m.id !== messageId);
             if (this.container) {
                 this.renderMessageList();
             }
-            
+
             if (this.currentMessage && this.currentMessage.id === messageId) {
                 this.currentMessage = null;
                 if (this.container) {
                     this.renderMessage();
                 }
             }
-            
+
             return true;
         } catch (error) {
             console.error('Failed to delete message:', error);
@@ -212,19 +212,19 @@ export class EmailEngineClient {
             await this.apiRequest('PUT', `/v1/account/${this.account}/message/${messageId}/move`, {
                 path: targetPath
             });
-            
+
             this.messages = this.messages.filter(m => m.id !== messageId);
             if (this.container) {
                 this.renderMessageList();
             }
-            
+
             if (this.currentMessage && this.currentMessage.id === messageId) {
                 this.currentMessage = null;
                 if (this.container) {
                     this.renderMessage();
                 }
             }
-            
+
             return true;
         } catch (error) {
             console.error('Failed to move message:', error);
@@ -236,7 +236,7 @@ export class EmailEngineClient {
         const date = new Date(dateStr);
         const now = new Date();
         const diff = now - date;
-        
+
         if (diff < 86400000) {
             return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         } else if (diff < 604800000) {
@@ -247,8 +247,10 @@ export class EmailEngineClient {
     }
 
     createStyles() {
-        if (typeof document === 'undefined') {return;}
-        
+        if (typeof document === 'undefined') {
+            return;
+        }
+
         const style = document.createElement('style');
         style.textContent = `
             .ee-client {
@@ -524,8 +526,10 @@ export class EmailEngineClient {
     }
 
     calculateFolderDepth(folder) {
-        if (!folder.parentPath || !folder.delimiter) {return 0;}
-        
+        if (!folder.parentPath || !folder.delimiter) {
+            return 0;
+        }
+
         const pathParts = folder.path.split(folder.delimiter);
         return Math.max(0, pathParts.length - 1);
     }
@@ -533,7 +537,7 @@ export class EmailEngineClient {
     buildFolderTree() {
         const specialFolders = [];
         const regularFolders = [];
-        
+
         this.folders.forEach(folder => {
             if (folder.specialUse) {
                 specialFolders.push(folder);
@@ -541,23 +545,33 @@ export class EmailEngineClient {
                 regularFolders.push(folder);
             }
         });
-        
+
         const specialOrder = ['\\Inbox', '\\Drafts', '\\Sent', '\\Trash', '\\Junk', '\\Archive'];
         specialFolders.sort((a, b) => {
-            if (a.specialUse === '\\Inbox' || a.name.toLowerCase() === 'inbox') {return -1;}
-            if (b.specialUse === '\\Inbox' || b.name.toLowerCase() === 'inbox') {return 1;}
-            
+            if (a.specialUse === '\\Inbox' || a.name.toLowerCase() === 'inbox') {
+                return -1;
+            }
+            if (b.specialUse === '\\Inbox' || b.name.toLowerCase() === 'inbox') {
+                return 1;
+            }
+
             const aIndex = specialOrder.indexOf(a.specialUse);
             const bIndex = specialOrder.indexOf(b.specialUse);
-            if (aIndex !== -1 && bIndex !== -1) {return aIndex - bIndex;}
-            if (aIndex !== -1) {return -1;}
-            if (bIndex !== -1) {return 1;}
+            if (aIndex !== -1 && bIndex !== -1) {
+                return aIndex - bIndex;
+            }
+            if (aIndex !== -1) {
+                return -1;
+            }
+            if (bIndex !== -1) {
+                return 1;
+            }
             return a.name.localeCompare(b.name);
         });
-        
+
         const buildHierarchy = (folders, parentPath = null, depth = 0) => {
             const result = [];
-            
+
             const children = folders.filter(f => {
                 if (parentPath === null) {
                     return f.parentPath === 'INBOX' || !f.parentPath || f.parentPath === '';
@@ -565,51 +579,57 @@ export class EmailEngineClient {
                     return f.parentPath === parentPath;
                 }
             });
-            
+
             children.sort((a, b) => a.name.localeCompare(b.name));
-            
+
             children.forEach(folder => {
                 result.push(folder);
                 result.push(...buildHierarchy(folders, folder.path, depth + 1));
             });
-            
+
             return result;
         };
-        
+
         const hierarchicalRegular = buildHierarchy(regularFolders);
-        
+
         return [...specialFolders, ...hierarchicalRegular];
     }
 
     renderFolderList() {
-        if (typeof document === 'undefined' || !this.container) {return;}
-        
+        if (typeof document === 'undefined' || !this.container) {
+            return;
+        }
+
         const sidebar = this.container.querySelector('.ee-sidebar');
-        if (!sidebar) {return;}
-        
+        if (!sidebar) {
+            return;
+        }
+
         const sortedFolders = this.buildFolderTree();
-        
+
         const html = `
             <ul class="ee-folder-list">
-                ${sortedFolders.map(folder => {
-                    const depth = this.calculateFolderDepth(folder);
-                    const hasChildren = this.folders.some(f => f.parentPath === folder.path);
-                    return `
+                ${sortedFolders
+                    .map(folder => {
+                        const depth = this.calculateFolderDepth(folder);
+                        const hasChildren = this.folders.some(f => f.parentPath === folder.path);
+                        return `
                         <li class="ee-folder-item ${folder.path === this.currentFolder ? 'active' : ''}" 
                             data-path="${folder.path}" 
                             data-depth="${depth}">
-                            <div class="ee-folder-content" style="padding-left: ${8 + (depth * 12)}px;">
+                            <div class="ee-folder-content" style="padding-left: ${8 + depth * 12}px;">
                                 ${depth > 0 ? '<span class="ee-folder-indent">└ </span>' : ''}
                                 <span class="ee-folder-name ${hasChildren ? 'has-children' : ''}">${folder.name}</span>
                                 ${folder.status && folder.status.messages > 0 ? `<span class="ee-folder-count">${folder.status.messages}</span>` : ''}
                             </div>
                         </li>
                     `;
-                }).join('')}
+                    })
+                    .join('')}
             </ul>
         `;
         sidebar.innerHTML = html;
-        
+
         sidebar.querySelectorAll('.ee-folder-item').forEach(item => {
             item.addEventListener('click', () => {
                 const path = item.getAttribute('data-path');
@@ -619,27 +639,36 @@ export class EmailEngineClient {
     }
 
     renderMessageList() {
-        if (typeof document === 'undefined' || !this.container) {return;}
-        
+        if (typeof document === 'undefined' || !this.container) {
+            return;
+        }
+
         const messageList = this.container.querySelector('.ee-message-list');
-        if (!messageList) {return;}
-        
+        if (!messageList) {
+            return;
+        }
+
         if (!this.messages.length) {
             messageList.innerHTML = '<div class="ee-empty-state">No messages</div>';
             return;
         }
-        
-        const paginationHtml = (this.nextPageCursor || this.prevPageCursor) ? `
+
+        const paginationHtml =
+            this.nextPageCursor || this.prevPageCursor
+                ? `
             <div class="ee-pagination">
                 ${this.prevPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="prev-page">← Previous</button>` : ''}
                 ${this.nextPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="next-page">Next →</button>` : ''}
             </div>
-        ` : '';
-        
+        `
+                : '';
+
         const html = `
             ${paginationHtml}
             <div class="ee-message-items">
-                ${this.messages.map(msg => `
+                ${this.messages
+                    .map(
+                        msg => `
                     <div class="ee-message-item ${msg.unseen ? 'unread' : ''} ${msg.id === (this.currentMessage && this.currentMessage.id) ? 'active' : ''}" data-id="${msg.id}">
                         <div class="ee-message-header">
                             <span class="ee-message-from">${msg.from ? msg.from.name || msg.from.address : 'Unknown'}</span>
@@ -648,25 +677,27 @@ export class EmailEngineClient {
                         <div class="ee-message-subject">${msg.subject || '(no subject)'}</div>
                         <div class="ee-message-preview">${msg.intro || ''}</div>
                     </div>
-                `).join('')}
+                `
+                    )
+                    .join('')}
             </div>
             ${paginationHtml}
         `;
         messageList.innerHTML = html;
-        
+
         messageList.querySelectorAll('.ee-message-item').forEach(item => {
             item.addEventListener('click', () => {
                 const messageId = item.getAttribute('data-id');
                 this.loadMessage(messageId);
             });
         });
-        
+
         messageList.querySelectorAll('[data-action="prev-page"]').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.loadMessages(this.currentFolder, this.prevPageCursor);
             });
         });
-        
+
         messageList.querySelectorAll('[data-action="next-page"]').forEach(btn => {
             btn.addEventListener('click', () => {
                 this.loadMessages(this.currentFolder, this.nextPageCursor);
@@ -675,16 +706,20 @@ export class EmailEngineClient {
     }
 
     renderMessage() {
-        if (typeof document === 'undefined' || !this.container) {return;}
-        
+        if (typeof document === 'undefined' || !this.container) {
+            return;
+        }
+
         const viewer = this.container.querySelector('.ee-message-viewer');
-        if (!viewer) {return;}
-        
+        if (!viewer) {
+            return;
+        }
+
         if (!this.currentMessage) {
             viewer.innerHTML = '<div class="ee-empty-state">Select a message to view</div>';
             return;
         }
-        
+
         const msg = this.currentMessage;
         const isUnseen = msg.unseen;
         const html = `
@@ -693,12 +728,14 @@ export class EmailEngineClient {
                 <button class="ee-button" data-action="delete">Delete</button>
                 <select class="ee-button" data-action="move">
                     <option value="">Move to...</option>
-                    ${this.buildFolderTree().map(folder => {
-                        const depth = this.calculateFolderDepth(folder);
-                        const indent = '　'.repeat(depth);
-                        const prefix = depth > 0 ? '└ ' : '';
-                        return `<option value="${folder.path}" ${folder.path === this.currentFolder ? 'disabled' : ''}>${indent}${prefix}${folder.name}</option>`;
-                    }).join('')}
+                    ${this.buildFolderTree()
+                        .map(folder => {
+                            const depth = this.calculateFolderDepth(folder);
+                            const indent = '　'.repeat(depth);
+                            const prefix = depth > 0 ? '└ ' : '';
+                            return `<option value="${folder.path}" ${folder.path === this.currentFolder ? 'disabled' : ''}>${indent}${prefix}${folder.name}</option>`;
+                        })
+                        .join('')}
                 </select>
             </div>
             <div class="ee-message-content">
@@ -711,12 +748,16 @@ export class EmailEngineClient {
                         <span class="ee-message-meta-label">To:</span>
                         ${msg.to ? msg.to.map(t => `${t.name || ''} &lt;${t.address}&gt;`).join(', ') : ''}
                     </div>
-                    ${msg.cc && msg.cc.length ? `
+                    ${
+                        msg.cc && msg.cc.length
+                            ? `
                         <div class="ee-message-meta-row">
                             <span class="ee-message-meta-label">Cc:</span>
                             ${msg.cc.map(c => `${c.name || ''} &lt;${c.address}&gt;`).join(', ')}
                         </div>
-                    ` : ''}
+                    `
+                            : ''
+                    }
                     <div class="ee-message-meta-row">
                         <span class="ee-message-meta-label">Date:</span>
                         ${new Date(msg.date).toLocaleString()}
@@ -727,24 +768,24 @@ export class EmailEngineClient {
                     </div>
                 </div>
                 <div class="ee-message-body">
-                    ${msg.text && msg.text.html ? msg.text.html : (msg.text && msg.text.plain ? `<pre>${msg.text.plain}</pre>` : '')}
+                    ${msg.text && msg.text.html ? msg.text.html : msg.text && msg.text.plain ? `<pre>${msg.text.plain}</pre>` : ''}
                 </div>
             </div>
         `;
         viewer.innerHTML = html;
-        
+
         viewer.querySelector('[data-action="toggle-read"]').addEventListener('click', () => {
             const currentlyUnseen = msg.unseen;
             this.markAsRead(msg.id, currentlyUnseen);
         });
-        
+
         viewer.querySelector('[data-action="delete"]').addEventListener('click', () => {
             if (confirm('Delete this message?')) {
                 this.deleteMessage(msg.id);
             }
         });
-        
-        viewer.querySelector('[data-action="move"]').addEventListener('change', (e) => {
+
+        viewer.querySelector('[data-action="move"]').addEventListener('change', e => {
             const targetPath = e.target.value;
             if (targetPath) {
                 this.moveMessage(msg.id, targetPath);
@@ -753,8 +794,10 @@ export class EmailEngineClient {
     }
 
     createLayout() {
-        if (typeof document === 'undefined' || !this.container) {return;}
-        
+        if (typeof document === 'undefined' || !this.container) {
+            return;
+        }
+
         this.container.innerHTML = `
             <div class="ee-client">
                 <div class="ee-sidebar">
@@ -775,15 +818,15 @@ export class EmailEngineClient {
             console.warn('EmailEngineClient UI features are only available in browser environments');
             return;
         }
-        
+
         this.createStyles();
         this.createLayout();
         this.loadFolders();
-        
+
         setTimeout(() => {
-            const inbox = this.folders.find(f => 
-                f.specialUse === '\\Inbox' || f.name.toLowerCase() === 'inbox'
-            ) || this.folders[0];
+            const inbox =
+                this.folders.find(f => f.specialUse === '\\Inbox' || f.name.toLowerCase() === 'inbox') ||
+                this.folders[0];
             if (inbox) {
                 this.loadMessages(inbox.path);
             }
@@ -803,19 +846,19 @@ export function createEmailEngineClient(options) {
     } else if (typeof options === 'object' && options.containerId) {
         options.container = typeof document !== 'undefined' ? document.getElementById(options.containerId) : null;
     }
-    
+
     if (options.container && !options.container) {
         throw new Error('Container element not found');
     }
-    
+
     if (!options.apiUrl) {
         console.warn('No API URL specified, using default http://127.0.0.1:3000');
     }
-    
+
     if (!options.account) {
         throw new Error('Account identifier is required');
     }
-    
+
     return new EmailEngineClient(options);
 }
 

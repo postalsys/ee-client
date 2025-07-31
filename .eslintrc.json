@@ -22,6 +22,6 @@
     "no-implied-eval": "error",
     "no-new-func": "error",
     "no-script-url": "error",
-    "no-alert": "warn"
+    "no-alert": "off"
   }
 }
