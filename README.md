@@ -111,14 +111,14 @@ When used in a browser with a container element, the client automatically create
 ```html
 <div id="email-client" style="height: 600px;"></div>
 <script type="module">
-import { EmailEngineClient } from '@postalsys/ee-client';
+    import { EmailEngineClient } from '@postalsys/ee-client';
 
-new EmailEngineClient({
-    apiUrl: 'https://your-emailengine-server.com',
-    account: 'your-account-id',
-    accessToken: 'your-access-token',
-    container: document.getElementById('email-client')
-});
+    new EmailEngineClient({
+        apiUrl: 'https://your-emailengine-server.com',
+        account: 'your-account-id',
+        accessToken: 'your-access-token',
+        container: document.getElementById('email-client')
+    });
 </script>
 ```
 
