@@ -1,0 +1,61 @@
+{
+  "name": "@postalsys/ee-client",
+  "version": "1.0.0",
+  "description": "EmailEngine client library for browser and Node.js applications",
+  "main": "index.js",
+  "module": "index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "require": "./index.cjs"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.cjs",
+    "index.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node build.js",
+    "lint": "eslint *.js",
+    "format": "prettier --write *.js *.json *.md",
+    "format:check": "prettier --check *.js *.json *.md",
+    "prepublishOnly": "npm run lint && npm run format:check && npm run build"
+  },
+  "keywords": [
+    "email",
+    "imap",
+    "client",
+    "emailengine",
+    "mail",
+    "webmail"
+  ],
+  "author": "Andris Reinman",
+  "license": "MIT",
+  "homepage": "https://github.com/postalsys/ee-client#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/postalsys/ee-client.git"
+  },
+  "bugs": {
+    "url": "https://github.com/postalsys/ee-client/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5"
+  },
+  "peerDependencies": {
+    "node-fetch": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "node-fetch": {
+      "optional": true
+    }
+  }
+}

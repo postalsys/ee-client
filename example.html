@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmailEngine Client Example</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        #email-client {
+            height: 600px;
+            max-width: 1200px;
+            margin: 0 auto;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+            display: none;
+        }
+        
+        .config-form {
+            max-width: 600px;
+            margin: 0 auto 30px;
+            padding: 30px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        
+        .error-message {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            color: #721c24;
+        }
+        
+        .config-note {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 15px;
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 4px;
+            color: #856404;
+        }
+        
+        .config-note code {
+            background: #fff;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        
+        .saved-config {
+            display: none;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <h1>EmailEngine Client Example</h1>
+    
+    <div class="config-form" id="config-form">
+        <h2>Configure EmailEngine Client</h2>
+        <div class="saved-config" id="saved-config">
+            Using saved configuration. <a href="#" onclick="clearConfig(); return false;">Clear</a>
+        </div>
+        
+        <form id="setup-form">
+            <div class="form-group">
+                <label for="apiUrl">EmailEngine API URL</label>
+                <input type="url" id="apiUrl" name="apiUrl" value="http://127.0.0.1:3000" required>
+                <small>The URL where your EmailEngine instance is running</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="accountId">Account ID</label>
+                <input type="text" id="accountId" name="accountId" placeholder="e.g., account_123abc" required>
+                <small>The email account identifier from your EmailEngine accounts</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="accessToken">Access Token (Optional)</label>
+                <input type="text" id="accessToken" name="accessToken" placeholder="Leave empty if not required">
+                <small>Bearer token for API authentication. Get one from EmailEngine admin panel.</small>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Connect to EmailEngine</button>
+                <button type="button" class="btn btn-secondary" onclick="loadTestData()">Load Test Values</button>
+            </div>
+            
+            <div class="error-message" id="error-message"></div>
+        </form>
+    </div>
+    
+    <div id="email-client"></div>
+    
+    <script src="emailengine-client.js"></script>
+    <script>
+        let client = null;
+        
+        // Check for saved configuration
+        const savedConfig = localStorage.getItem('emailEngineConfig');
+        if (savedConfig) {
+            const config = JSON.parse(savedConfig);
+            document.getElementById('apiUrl').value = config.apiUrl || '';
+            document.getElementById('accountId').value = config.accountId || '';
+            document.getElementById('accessToken').value = config.accessToken || '';
+            document.getElementById('saved-config').style.display = 'block';
+        }
+        
+        // Handle form submission
+        document.getElementById('setup-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const apiUrl = document.getElementById('apiUrl').value.trim();
+            const accountId = document.getElementById('accountId').value.trim();
+            const accessToken = document.getElementById('accessToken').value.trim();
+            
+            // Hide any previous error
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            
+            try {
+                // Create the email client instance
+                const config = {
+                    containerId: 'email-client',
+                    apiUrl: apiUrl,
+                    account: accountId
+                };
+                
+                if (accessToken) {
+                    config.accessToken = accessToken;
+                }
+                
+                // Save configuration to localStorage
+                localStorage.setItem('emailEngineConfig', JSON.stringify({
+                    apiUrl: apiUrl,
+                    accountId: accountId,
+                    accessToken: accessToken
+                }));
+                
+                // Initialize the client
+                client = EmailEngineClient(config);
+                
+                // Hide form and show email client
+                document.getElementById('config-form').style.display = 'none';
+                document.getElementById('email-client').style.display = 'block';
+                
+            } catch (error) {
+                errorDiv.textContent = 'Error: ' + error.message;
+                errorDiv.style.display = 'block';
+            }
+        });
+        
+        // Load test data function
+        function loadTestData() {
+            document.getElementById('apiUrl').value = 'http://127.0.0.1:3000';
+            document.getElementById('accountId').value = 'test-account-id';
+            document.getElementById('accessToken').value = 'test-access-token';
+        }
+        
+        // Clear saved configuration
+        function clearConfig() {
+            localStorage.removeItem('emailEngineConfig');
+            document.getElementById('saved-config').style.display = 'none';
+            document.getElementById('apiUrl').value = 'http://127.0.0.1:3000';
+            document.getElementById('accountId').value = '';
+            document.getElementById('accessToken').value = '';
+        }
+        
+        // Add back button functionality
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && client) {
+                if (confirm('Return to configuration form?')) {
+                    document.getElementById('config-form').style.display = 'block';
+                    document.getElementById('email-client').style.display = 'none';
+                    document.getElementById('email-client').innerHTML = '';
+                    client = null;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
