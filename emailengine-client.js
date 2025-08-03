@@ -7,7 +7,7 @@
             this.account = options.account;
             this.accessToken = options.accessToken;
             this.container = options.container;
-            this.confirmMethod = options.confirmMethod || ((message) => confirm(message));
+            this.confirmMethod = options.confirmMethod || (message => confirm(message));
 
             this.currentFolder = null;
             this.currentMessage = null;

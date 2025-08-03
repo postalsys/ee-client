@@ -120,7 +120,7 @@ When used in a browser with a container element, the client automatically create
         accessToken: 'your-access-token',
         container: document.getElementById('email-client'),
         // Optional: Custom confirm dialog
-        confirmMethod: async (message) => {
+        confirmMethod: async message => {
             return await myCustomDialog.confirm(message);
         }
     });
@@ -137,7 +137,7 @@ const client = new EmailEngineClient({
     account: 'your-account-id',
     accessToken: 'your-access-token',
     container: document.getElementById('email-client'),
-    confirmMethod: async (message) => {
+    confirmMethod: async message => {
         // Example with a custom async dialog
         return await MyModal.confirm({
             title: 'Confirm Action',
@@ -152,13 +152,13 @@ The `confirmMethod` can be either synchronous or asynchronous:
 
 ```javascript
 // Synchronous example
-confirmMethod: (message) => window.confirm(message)
+confirmMethod: message => window.confirm(message);
 
 // Asynchronous example
-confirmMethod: async (message) => {
+confirmMethod: async message => {
     const result = await customDialog.show(message);
     return result === 'ok';
-}
+};
 ```
 
 ## License
