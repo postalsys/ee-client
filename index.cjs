@@ -4,6 +4,7 @@ class EmailEngineClient {
         this.account = options.account;
         this.accessToken = options.accessToken;
         this.container = options.container;
+        this.confirmMethod = options.confirmMethod || ((message) => confirm(message));
 
         this.currentFolder = null;
         this.currentMessage = null;
@@ -11,6 +12,11 @@ class EmailEngineClient {
         this.messages = [];
         this.nextPageCursor = null;
         this.prevPageCursor = null;
+
+        // Get page size from localStorage or options or default
+        const savedPageSize =
+            typeof window !== 'undefined' && window.localStorage ? localStorage.getItem('ee-client-page-size') : null;
+        this.pageSize = savedPageSize ? parseInt(savedPageSize) : options.pageSize || 20;
 
         if (this.container) {
             this.init();
@@ -81,7 +87,7 @@ class EmailEngineClient {
         }
 
         try {
-            const params = new URLSearchParams({ path: path, pageSize: 50 });
+            const params = new URLSearchParams({ path: path, pageSize: this.pageSize });
             if (cursor) {
                 params.set('cursor', cursor);
             }
@@ -94,6 +100,7 @@ class EmailEngineClient {
 
             if (this.container) {
                 this.renderMessageList();
+                this.renderFolderList(); // Re-render to update active state
             }
 
             return {
@@ -246,6 +253,99 @@ class EmailEngineClient {
         }
     }
 
+    formatFileSize(bytes) {
+        if (!bytes) {
+            return '';
+        }
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
+    }
+
+    async downloadAttachment(attachmentId, suggestedFilename = null) {
+        try {
+            const headers = {};
+            if (this.accessToken) {
+                headers['Authorization'] = `Bearer ${this.accessToken}`;
+            }
+
+            const response = await fetch(`${this.apiUrl}/v1/account/${this.account}/attachment/${attachmentId}`, {
+                headers,
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // Get filename from Content-Disposition header if available
+            const contentDisposition = response.headers.get('content-disposition');
+            let filename = suggestedFilename || 'attachment';
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (filenameMatch && filenameMatch[1]) {
+                    filename = filenameMatch[1].replace(/['"]/g, '');
+                }
+            }
+
+            // Get the attachment data
+            const blob = await response.blob();
+
+            // Create a download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Failed to download attachment:', error);
+            alert('Failed to download attachment');
+        }
+    }
+
+    async downloadOriginalMessage(messageId, subject = null) {
+        try {
+            const headers = {};
+            if (this.accessToken) {
+                headers['Authorization'] = `Bearer ${this.accessToken}`;
+            }
+
+            const response = await fetch(`${this.apiUrl}/v1/account/${this.account}/message/${messageId}/source`, {
+                headers,
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            // Get the email data
+            const blob = await response.blob();
+
+            // Create filename based on subject and date
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0];
+            const safeSubject = subject ? subject.replace(/[^a-z0-9]/gi, '_').substring(0, 50) : 'email';
+            const filename = `${dateStr}_${safeSubject}.eml`;
+
+            // Create a download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Failed to download original message:', error);
+            alert('Failed to download original message');
+        }
+    }
+
     createStyles() {
         if (typeof document === 'undefined') {
             return;
@@ -271,9 +371,10 @@ class EmailEngineClient {
             
             .ee-sidebar {
                 width: 200px;
-                background: #f5f5f5;
+                background: #ffffff;
                 border-right: 1px solid #ddd;
-                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
             }
             
             .ee-folder-list {
@@ -285,6 +386,7 @@ class EmailEngineClient {
             .ee-folder-item {
                 cursor: pointer;
                 border-bottom: 1px solid #e0e0e0;
+                position: relative;
             }
             
             .ee-folder-item:hover {
@@ -294,6 +396,16 @@ class EmailEngineClient {
             .ee-folder-item.active {
                 background: #007bff;
                 color: white;
+            }
+            
+            .ee-folder-item.active::before {
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 3px;
+                background: #0056b3;
             }
             
             .ee-folder-content {
@@ -340,7 +452,9 @@ class EmailEngineClient {
             .ee-message-list {
                 width: 350px;
                 border-right: 1px solid #ddd;
-                overflow-y: auto;
+                background: #ffffff;
+                display: flex;
+                flex-direction: column;
             }
             
             .ee-message-item {
@@ -382,10 +496,17 @@ class EmailEngineClient {
             }
             
             .ee-message-subject {
+                display: flex;
+                align-items: center;
+                margin-bottom: 2px;
+            }
+            
+            .ee-message-subject-text {
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
-                margin-bottom: 2px;
+                flex: 1;
+                min-width: 0;
             }
             
             .ee-message-preview {
@@ -397,6 +518,17 @@ class EmailEngineClient {
                 font-weight: normal;
             }
             
+            .ee-attachment-indicator {
+                display: inline-block;
+                font-size: 11px;
+                color: #666;
+                margin-left: 8px;
+            }
+            
+            .ee-attachment-indicator::before {
+                content: "📎 ";
+            }
+            
             .ee-message-viewer {
                 flex: 1;
                 display: flex;
@@ -405,20 +537,34 @@ class EmailEngineClient {
             }
             
             .ee-message-actions {
-                padding: 12px 16px;
-                background: #f5f5f5;
-                border-bottom: 1px solid #ddd;
+                padding: 10px 16px;
+                background: #e9ecef;
+                background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+                border-bottom: 2px solid #dee2e6;
                 display: flex;
                 gap: 8px;
+                height: 44px;
+                align-items: center;
+                flex-shrink: 0;
+                box-sizing: border-box;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             }
             
             .ee-button {
-                padding: 6px 12px;
+                padding: 4px 10px;
                 border: 1px solid #ddd;
                 background: white;
                 border-radius: 4px;
                 cursor: pointer;
-                font-size: 13px;
+                font-size: 12px;
+                height: 24px;
+                line-height: 1;
+                box-sizing: border-box;
+            }
+            
+            select.ee-button {
+                padding: 3px 10px;
+                height: 24px;
             }
             
             .ee-button:hover:not(:disabled) {
@@ -464,6 +610,53 @@ class EmailEngineClient {
                 height: auto;
             }
             
+            .ee-attachments {
+                margin-top: 16px;
+                padding-top: 16px;
+                border-top: 1px solid #e0e0e0;
+            }
+            
+            .ee-attachments-title {
+                font-weight: 500;
+                margin-bottom: 8px;
+                color: #333;
+            }
+            
+            .ee-attachment-item {
+                display: flex;
+                align-items: center;
+                padding: 8px;
+                margin-bottom: 4px;
+                background: #f8f8f8;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+            
+            .ee-attachment-item:hover {
+                background: #f0f0f0;
+            }
+            
+            .ee-attachment-icon {
+                margin-right: 8px;
+                font-size: 18px;
+            }
+            
+            .ee-attachment-info {
+                flex: 1;
+            }
+            
+            .ee-attachment-name {
+                font-weight: 500;
+                color: #333;
+            }
+            
+            .ee-attachment-size {
+                font-size: 12px;
+                color: #666;
+            }
+            
             .ee-empty-state {
                 display: flex;
                 align-items: center;
@@ -502,19 +695,64 @@ class EmailEngineClient {
                 background: #2196F3;
             }
             
-            .ee-pagination {
-                padding: 8px 16px;
-                background: #f8f9fa;
-                border-top: 1px solid #e0e0e0;
-                border-bottom: 1px solid #e0e0e0;
+            .ee-pane-header {
+                padding: 10px 16px;
+                background: #e9ecef;
+                background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+                border-bottom: 2px solid #dee2e6;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                height: 44px;
+                flex-shrink: 0;
+                box-sizing: border-box;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            
+            .ee-pane-title {
+                font-weight: 500;
+                font-size: 14px;
+                color: #333;
+            }
+            
+            .ee-folder-tree {
+                flex: 1;
+                overflow-y: auto;
+            }
+            
+            .ee-pagination-controls {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+            }
+            
+            .ee-page-size-selector {
+                display: flex;
+                gap: 4px;
+                align-items: center;
+                margin-left: auto;
+            }
+            
+            .ee-page-size-label {
+                font-size: 12px;
+                color: #666;
+            }
+            
+            .ee-page-size-select {
+                font-size: 11px;
+                padding: 2px 4px;
+                border: 1px solid #ddd;
+                border-radius: 3px;
+                background: white;
+                cursor: pointer;
+                height: 22px;
             }
             
             .ee-pagination-btn {
-                font-size: 12px;
-                padding: 4px 8px;
+                font-size: 11px;
+                padding: 3px 8px;
+                height: 22px;
+                line-height: 1;
             }
             
             .ee-message-items {
@@ -600,8 +838,8 @@ class EmailEngineClient {
             return;
         }
 
-        const sidebar = this.container.querySelector('.ee-sidebar');
-        if (!sidebar) {
+        const folderTree = this.container.querySelector('.ee-folder-tree');
+        if (!folderTree) {
             return;
         }
 
@@ -628,9 +866,9 @@ class EmailEngineClient {
                     .join('')}
             </ul>
         `;
-        sidebar.innerHTML = html;
+        folderTree.innerHTML = html;
 
-        sidebar.querySelectorAll('.ee-folder-item').forEach(item => {
+        folderTree.querySelectorAll('.ee-folder-item').forEach(item => {
             item.addEventListener('click', () => {
                 const path = item.getAttribute('data-path');
                 this.loadMessages(path);
@@ -649,22 +887,41 @@ class EmailEngineClient {
         }
 
         if (!this.messages.length) {
-            messageList.innerHTML = '<div class="ee-empty-state">No messages</div>';
+            messageList.innerHTML = `
+                <div class="ee-pane-header">
+                    <span class="ee-pane-title">Messages</span>
+                </div>
+                <div class="ee-empty-state">No messages</div>
+            `;
             return;
         }
 
-        const paginationHtml =
-            this.nextPageCursor || this.prevPageCursor
-                ? `
-            <div class="ee-pagination">
-                ${this.prevPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="prev-page">← Previous</button>` : ''}
-                ${this.nextPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="next-page">Next →</button>` : ''}
-            </div>
-        `
-                : '';
+        const hasPagination = this.nextPageCursor || this.prevPageCursor;
 
         const html = `
-            ${paginationHtml}
+            <div class="ee-pane-header">
+                <span class="ee-pane-title">Messages</span>
+                <div class="ee-pagination-controls">
+                    ${
+                        hasPagination
+                            ? `
+                        ${this.prevPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="prev-page">← Previous</button>` : ''}
+                        ${this.nextPageCursor ? `<button class="ee-button ee-pagination-btn" data-action="next-page">Next →</button>` : ''}
+                    `
+                            : ''
+                    }
+                    <div class="ee-page-size-selector">
+                        <span class="ee-page-size-label">Show:</span>
+                        <select class="ee-page-size-select" data-action="page-size">
+                            <option value="10" ${this.pageSize === 10 ? 'selected' : ''}>10</option>
+                            <option value="20" ${this.pageSize === 20 ? 'selected' : ''}>20</option>
+                            <option value="30" ${this.pageSize === 30 ? 'selected' : ''}>30</option>
+                            <option value="50" ${this.pageSize === 50 ? 'selected' : ''}>50</option>
+                            <option value="100" ${this.pageSize === 100 ? 'selected' : ''}>100</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
             <div class="ee-message-items">
                 ${this.messages
                     .map(
@@ -674,14 +931,16 @@ class EmailEngineClient {
                             <span class="ee-message-from">${msg.from ? msg.from.name || msg.from.address : 'Unknown'}</span>
                             <span class="ee-message-date">${this.formatDate(msg.date)}</span>
                         </div>
-                        <div class="ee-message-subject">${msg.subject || '(no subject)'}</div>
+                        <div class="ee-message-subject">
+                            <span class="ee-message-subject-text">${msg.subject || '(no subject)'}</span>
+                            ${msg.attachments && msg.attachments.length > 0 ? `<span class="ee-attachment-indicator">${msg.attachments.length}</span>` : ''}
+                        </div>
                         <div class="ee-message-preview">${msg.intro || ''}</div>
                     </div>
                 `
                     )
                     .join('')}
             </div>
-            ${paginationHtml}
         `;
         messageList.innerHTML = html;
 
@@ -703,6 +962,18 @@ class EmailEngineClient {
                 this.loadMessages(this.currentFolder, this.nextPageCursor);
             });
         });
+
+        const pageSizeSelect = messageList.querySelector('[data-action="page-size"]');
+        if (pageSizeSelect) {
+            pageSizeSelect.addEventListener('change', e => {
+                this.pageSize = parseInt(e.target.value);
+                // Save to localStorage
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    localStorage.setItem('ee-client-page-size', this.pageSize.toString());
+                }
+                this.loadMessages(this.currentFolder);
+            });
+        }
     }
 
     renderMessage() {
@@ -726,6 +997,7 @@ class EmailEngineClient {
             <div class="ee-message-actions">
                 <button class="ee-button" data-action="toggle-read">Mark as ${isUnseen ? 'seen' : 'unseen'}</button>
                 <button class="ee-button" data-action="delete">Delete</button>
+                <button class="ee-button" data-action="download-original">Download Original</button>
                 <select class="ee-button" data-action="move">
                     <option value="">Move to...</option>
                     ${this.buildFolderTree()
@@ -770,6 +1042,28 @@ class EmailEngineClient {
                 <div class="ee-message-body">
                     ${msg.text && msg.text.html ? msg.text.html : msg.text && msg.text.plain ? `<pre>${msg.text.plain}</pre>` : ''}
                 </div>
+                ${
+                    msg.attachments && msg.attachments.length > 0
+                        ? `
+                    <div class="ee-attachments">
+                        <div class="ee-attachments-title">Attachments (${msg.attachments.length})</div>
+                        ${msg.attachments
+                            .map(
+                                att => `
+                            <div class="ee-attachment-item" data-attachment-id="${att.id}">
+                                <div class="ee-attachment-icon">📎</div>
+                                <div class="ee-attachment-info">
+                                    <div class="ee-attachment-name">${att.filename || 'Unnamed attachment'}</div>
+                                    ${att.size ? `<div class="ee-attachment-size">${this.formatFileSize(att.size)}</div>` : ''}
+                                </div>
+                            </div>
+                        `
+                            )
+                            .join('')}
+                    </div>
+                `
+                        : ''
+                }
             </div>
         `;
         viewer.innerHTML = html;
@@ -779,10 +1073,15 @@ class EmailEngineClient {
             this.markAsRead(msg.id, currentlyUnseen);
         });
 
-        viewer.querySelector('[data-action="delete"]').addEventListener('click', () => {
-            if (confirm('Delete this message?')) {
+        viewer.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+            const result = await this.confirmMethod('Delete this message?');
+            if (result) {
                 this.deleteMessage(msg.id);
             }
+        });
+
+        viewer.querySelector('[data-action="download-original"]').addEventListener('click', () => {
+            this.downloadOriginalMessage(msg.id, msg.subject);
         });
 
         viewer.querySelector('[data-action="move"]').addEventListener('change', e => {
@@ -790,6 +1089,15 @@ class EmailEngineClient {
             if (targetPath) {
                 this.moveMessage(msg.id, targetPath);
             }
+        });
+
+        // Add click handlers for attachments
+        viewer.querySelectorAll('.ee-attachment-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const attachmentId = item.getAttribute('data-attachment-id');
+                const attachment = msg.attachments.find(a => a.id === attachmentId);
+                this.downloadAttachment(attachmentId, attachment ? attachment.filename : null);
+            });
         });
     }
 
@@ -801,9 +1109,17 @@ class EmailEngineClient {
         this.container.innerHTML = `
             <div class="ee-client">
                 <div class="ee-sidebar">
-                    <div class="ee-loading">Loading folders...</div>
+                    <div class="ee-pane-header">
+                        <span class="ee-pane-title">Folders</span>
+                    </div>
+                    <div class="ee-folder-tree">
+                        <div class="ee-loading">Loading folders...</div>
+                    </div>
                 </div>
                 <div class="ee-message-list">
+                    <div class="ee-pane-header">
+                        <span class="ee-pane-title">Messages</span>
+                    </div>
                     <div class="ee-empty-state">Select a folder</div>
                 </div>
                 <div class="ee-message-viewer">
@@ -821,16 +1137,19 @@ class EmailEngineClient {
 
         this.createStyles();
         this.createLayout();
-        this.loadFolders();
-
-        setTimeout(() => {
-            const inbox =
-                this.folders.find(f => f.specialUse === '\\Inbox' || f.name.toLowerCase() === 'inbox') ||
-                this.folders[0];
-            if (inbox) {
-                this.loadMessages(inbox.path);
-            }
-        }, 500);
+        this.loadFolders()
+            .then(() => {
+                const inbox =
+                    this.folders.find(f => f.specialUse && f.specialUse.includes('\\Inbox')) ||
+                    this.folders.find(f => f.name.toLowerCase() === 'inbox') ||
+                    this.folders[0];
+                if (inbox) {
+                    this.loadMessages(inbox.path);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to auto-select inbox:', error);
+            });
     }
 }
 

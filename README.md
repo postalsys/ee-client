@@ -72,6 +72,7 @@ const client = new EmailEngineClient({
 - `account` (string, required): Account identifier
 - `accessToken` (string, optional): Access token for authentication
 - `container` (HTMLElement, optional): DOM container for UI components (browser only)
+- `confirmMethod` (function, optional): Custom confirm dialog method. Can be sync or async. Defaults to browser's `confirm()`
 
 ### Methods
 
@@ -117,9 +118,47 @@ When used in a browser with a container element, the client automatically create
         apiUrl: 'https://your-emailengine-server.com',
         account: 'your-account-id',
         accessToken: 'your-access-token',
-        container: document.getElementById('email-client')
+        container: document.getElementById('email-client'),
+        // Optional: Custom confirm dialog
+        confirmMethod: async (message) => {
+            return await myCustomDialog.confirm(message);
+        }
     });
 </script>
+```
+
+### Custom Confirm Dialog
+
+You can provide a custom confirm dialog method that will be used instead of the browser's default `confirm()`. This is useful for integrating with UI frameworks or custom dialog systems:
+
+```javascript
+const client = new EmailEngineClient({
+    apiUrl: 'https://your-emailengine-server.com',
+    account: 'your-account-id',
+    accessToken: 'your-access-token',
+    container: document.getElementById('email-client'),
+    confirmMethod: async (message) => {
+        // Example with a custom async dialog
+        return await MyModal.confirm({
+            title: 'Confirm Action',
+            message: message,
+            buttons: ['Cancel', 'OK']
+        });
+    }
+});
+```
+
+The `confirmMethod` can be either synchronous or asynchronous:
+
+```javascript
+// Synchronous example
+confirmMethod: (message) => window.confirm(message)
+
+// Asynchronous example
+confirmMethod: async (message) => {
+    const result = await customDialog.show(message);
+    return result === 'ok';
+}
 ```
 
 ## License

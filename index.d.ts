@@ -50,6 +50,7 @@ export interface EmailEngineClientOptions {
     accessToken?: string;
     container?: HTMLElement;
     containerId?: string;
+    confirmMethod?: (message: string) => boolean | Promise<boolean>;
 }
 
 export declare class EmailEngineClient {

@@ -7,6 +7,7 @@
             this.account = options.account;
             this.accessToken = options.accessToken;
             this.container = options.container;
+            this.confirmMethod = options.confirmMethod || ((message) => confirm(message));
 
             this.currentFolder = null;
             this.currentMessage = null;
@@ -760,8 +761,9 @@
                 this.markAsRead(msg.id, currentlyUnseen); // if unseen, mark as seen (true), if seen mark as unseen (false)
             });
 
-            viewer.querySelector('[data-action="delete"]').addEventListener('click', () => {
-                if (confirm('Delete this message?')) {
+            viewer.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+                const result = await this.confirmMethod('Delete this message?');
+                if (result) {
                     this.deleteMessage(msg.id);
                 }
             });
