@@ -1,6 +1,6 @@
 {
     "name": "@postalsys/ee-client",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "EmailEngine client library for browser and Node.js applications",
     "main": "index.js",
     "module": "index.js",
