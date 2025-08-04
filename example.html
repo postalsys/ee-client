@@ -179,8 +179,9 @@
     
     <div id="email-client"></div>
     
-    <script src="emailengine-client.js"></script>
-    <script>
+    <script type="module">
+        import { EmailEngineClient, createEmailEngineClient } from './index.js';
+        
         let client = null;
         
         // Check for saved configuration
@@ -226,7 +227,7 @@
                 }));
                 
                 // Initialize the client
-                client = EmailEngineClient(config);
+                client = createEmailEngineClient(config);
                 
                 // Hide form and show email client
                 document.getElementById('config-form').style.display = 'none';

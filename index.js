@@ -4,7 +4,8 @@ export class EmailEngineClient {
         this.account = options.account;
         this.accessToken = options.accessToken;
         this.container = options.container;
-        this.confirmMethod = options.confirmMethod || (message => confirm(message));
+        this.confirmMethod = options.confirmMethod || ((message, _title = 'Confirm', _cancelText = 'Cancel', _okText = 'OK') => confirm(message));
+        this.alertMethod = options.alertMethod || ((message, _title = 'Notice', _cancelText = null, _okText = 'OK') => alert(message));
 
         this.currentFolder = null;
         this.currentMessage = null;
@@ -58,7 +59,18 @@ export class EmailEngineClient {
 
         const response = await fetchFn(url, options);
         if (!response.ok) {
-            throw new Error(`API request failed: ${response.statusText}`);
+            let errorDetails;
+            try {
+                errorDetails = await response.json();
+            } catch (parseError) {
+                // If JSON parsing fails, fall back to status text
+                errorDetails = { message: response.statusText };
+            }
+            
+            const error = new Error(`API request failed: ${response.statusText}`);
+            error.statusCode = response.status;
+            error.details = errorDetails;
+            throw error;
         }
 
         return await response.json();
@@ -98,9 +110,13 @@ export class EmailEngineClient {
             this.nextPageCursor = data.nextPageCursor || null;
             this.prevPageCursor = data.prevPageCursor || null;
 
+            // Clear active email selection when folder changes
+            this.currentMessage = null;
+
             if (this.container) {
                 this.renderMessageList();
                 this.renderFolderList(); // Re-render to update active state
+                this.renderMessage(); // Clear message viewer
             }
 
             return {
@@ -239,6 +255,73 @@ export class EmailEngineClient {
         }
     }
 
+    async sendMessage(to, subject, text) {
+        try {
+            const toAddresses = Array.isArray(to) 
+                ? to.map(addr => typeof addr === 'string' ? { address: addr } : addr)
+                : [typeof to === 'string' ? { address: to } : to];
+
+            const messageData = {
+                to: toAddresses,
+                subject: subject,
+                text: text
+            };
+
+            const response = await this.apiRequest('POST', `/v1/account/${this.account}/submit`, messageData);
+            return response;
+        } catch (error) {
+            console.error('Failed to send message:', error);
+            // Try to parse detailed error information
+            this._parseApiError(error);
+            throw error;
+        }
+    }
+
+    _parseApiError(error) {
+        try {
+            // If error has response text, try to parse it
+            if (error.message && error.message.includes('API request failed:')) {
+                // This is our custom error from apiRequest, the actual response might have more details
+                error.isDetailedError = false;
+            }
+        } catch (parseError) {
+            // If parsing fails, just use the original error
+            console.error('Failed to parse error details:', parseError);
+        }
+    }
+
+    _formatSendError(error) {
+        // If we have detailed error information from the API
+        if (error.details && error.details.fields && Array.isArray(error.details.fields)) {
+            const fieldErrors = error.details.fields.map(field => {
+                // Try to make field errors more user-friendly
+                let message = field.message;
+                
+                // Map technical field names to user-friendly names
+                if (message.includes('to[0].address') || message.includes('"address"')) {
+                    message = message.replace(/to\[\d+\]\.address|"address"/g, 'email address');
+                }
+                if (message.includes('"subject"')) {
+                    message = message.replace('"subject"', 'subject');
+                }
+                if (message.includes('"text"')) {
+                    message = message.replace('"text"', 'message');
+                }
+                
+                return message;
+            });
+            
+            const mainMessage = error.details.message || 'Failed to send email';
+            if (fieldErrors.length > 0) {
+                return `${mainMessage}:\n\n• ${fieldErrors.join('\n• ')}`;
+            }
+            return mainMessage;
+        }
+        
+        // Fallback to generic error message
+        return 'Failed to send email. Please check your input and try again.';
+    }
+
     formatDate(dateStr) {
         const date = new Date(dateStr);
         const now = new Date();
@@ -302,7 +385,7 @@ export class EmailEngineClient {
             window.URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Failed to download attachment:', error);
-            alert('Failed to download attachment');
+            this.alertMethod('Failed to download attachment. Please try again.', 'Download Error', null, 'OK');
         }
     }
 
@@ -342,7 +425,7 @@ export class EmailEngineClient {
             window.URL.revokeObjectURL(url);
         } catch (error) {
             console.error('Failed to download original message:', error);
-            alert('Failed to download original message');
+            this.alertMethod('Failed to download original message. Please try again.', 'Download Error', null, 'OK');
         }
     }
 
@@ -363,6 +446,7 @@ export class EmailEngineClient {
                 color: #333;
                 background: #fff;
                 border: 1px solid #ddd;
+                position: relative;
             }
             
             .ee-client * {
@@ -759,6 +843,185 @@ export class EmailEngineClient {
                 flex: 1;
                 overflow-y: auto;
             }
+            
+            .ee-compose-button {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                width: 56px;
+                height: 56px;
+                background: #007bff;
+                border: none;
+                border-radius: 50%;
+                color: white;
+                font-size: 24px;
+                cursor: pointer;
+                box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+                z-index: 1000;
+                transition: all 0.2s ease;
+            }
+            
+            .ee-compose-button:hover {
+                background: #0056b3;
+                transform: scale(1.05);
+                box-shadow: 0 6px 16px rgba(0,123,255,0.4);
+            }
+            
+            .ee-compose-modal {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 2000;
+            }
+            
+            .ee-compose-modal.show {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .ee-compose-dialog {
+                background: white;
+                border-radius: 8px;
+                width: 90%;
+                max-width: 600px;
+                max-height: 80vh;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+                display: flex;
+                flex-direction: column;
+            }
+            
+            .ee-compose-header {
+                padding: 16px 20px;
+                border-bottom: 1px solid #e0e0e0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-shrink: 0;
+            }
+            
+            .ee-compose-title {
+                font-size: 18px;
+                font-weight: 600;
+                margin: 0;
+            }
+            
+            .ee-compose-close {
+                background: none;
+                border: none;
+                font-size: 24px;
+                color: #666;
+                cursor: pointer;
+                padding: 0;
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .ee-compose-close:hover {
+                background: #f0f0f0;
+            }
+            
+            .ee-compose-form {
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 16px;
+                flex: 1;
+                overflow-y: auto;
+            }
+            
+            .ee-compose-field {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            .ee-compose-label {
+                font-weight: 500;
+                color: #333;
+            }
+            
+            .ee-compose-input {
+                padding: 8px 12px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+                font-family: inherit;
+            }
+            
+            .ee-compose-input:focus {
+                outline: none;
+                border-color: #007bff;
+                box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+            }
+            
+            .ee-compose-textarea {
+                padding: 12px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+                font-family: inherit;
+                resize: vertical;
+                min-height: 200px;
+            }
+            
+            .ee-compose-textarea:focus {
+                outline: none;
+                border-color: #007bff;
+                box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+            }
+            
+            .ee-compose-actions {
+                padding: 16px 20px;
+                border-top: 1px solid #e0e0e0;
+                display: flex;
+                gap: 12px;
+                justify-content: flex-end;
+                flex-shrink: 0;
+            }
+            
+            .ee-compose-send {
+                background: #007bff;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 4px;
+                font-size: 14px;
+                font-weight: 500;
+                cursor: pointer;
+            }
+            
+            .ee-compose-send:hover:not(:disabled) {
+                background: #0056b3;
+            }
+            
+            .ee-compose-send:disabled {
+                background: #6c757d;
+                cursor: not-allowed;
+                opacity: 0.6;
+            }
+            
+            .ee-compose-cancel {
+                background: #6c757d;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 4px;
+                font-size: 14px;
+                cursor: pointer;
+            }
+            
+            .ee-compose-cancel:hover {
+                background: #545b62;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -1074,7 +1337,7 @@ export class EmailEngineClient {
         });
 
         viewer.querySelector('[data-action="delete"]').addEventListener('click', async () => {
-            const result = await this.confirmMethod('Delete this message?');
+            const result = await this.confirmMethod('Are you sure you want to delete this message? This action cannot be undone.', 'Delete Message', 'Cancel', 'Delete');
             if (result) {
                 this.deleteMessage(msg.id);
             }
@@ -1099,6 +1362,12 @@ export class EmailEngineClient {
                 this.downloadAttachment(attachmentId, attachment ? attachment.filename : null);
             });
         });
+
+        // Scroll message viewer back to top when new email is displayed
+        const messageContent = viewer.querySelector('.ee-message-content');
+        if (messageContent) {
+            messageContent.scrollTop = 0;
+        }
     }
 
     createLayout() {
@@ -1126,7 +1395,202 @@ export class EmailEngineClient {
                     <div class="ee-empty-state">Select a message to view</div>
                 </div>
             </div>
+            <button class="ee-compose-button" title="Compose Email">✉</button>
+            <div class="ee-compose-modal">
+                <div class="ee-compose-dialog">
+                    <div class="ee-compose-header">
+                        <h3 class="ee-compose-title">Compose Email</h3>
+                        <button class="ee-compose-close">×</button>
+                    </div>
+                    <form class="ee-compose-form">
+                        <div class="ee-compose-field">
+                            <label class="ee-compose-label">To:</label>
+                            <input type="email" class="ee-compose-input" name="to" placeholder="recipient@example.com" required>
+                        </div>
+                        <div class="ee-compose-field">
+                            <label class="ee-compose-label">Subject:</label>
+                            <input type="text" class="ee-compose-input" name="subject" placeholder="Enter subject">
+                        </div>
+                        <div class="ee-compose-field">
+                            <label class="ee-compose-label">Message:</label>
+                            <textarea class="ee-compose-textarea" name="message" placeholder="Type your message here..." required></textarea>
+                        </div>
+                    </form>
+                    <div class="ee-compose-actions">
+                        <button type="button" class="ee-compose-cancel">Cancel</button>
+                        <button type="button" class="ee-compose-send">Send</button>
+                    </div>
+                </div>
+            </div>
         `;
+
+        // Wire up compose modal events
+        this.setupComposeModal();
+        
+        // Position compose button correctly
+        this.positionComposeButton();
+    }
+
+    setupComposeModal() {
+        if (typeof document === 'undefined' || !this.container) {
+            return;
+        }
+
+        const composeButton = this.container.querySelector('.ee-compose-button');
+        const modal = this.container.querySelector('.ee-compose-modal');
+        const closeButton = this.container.querySelector('.ee-compose-close');
+        const cancelButton = this.container.querySelector('.ee-compose-cancel');
+        const sendButton = this.container.querySelector('.ee-compose-send');
+        const form = this.container.querySelector('.ee-compose-form');
+
+        // Open modal
+        composeButton.addEventListener('click', () => {
+            modal.classList.add('show');
+            // Focus the To field
+            const toField = form.querySelector('input[name="to"]');
+            setTimeout(() => toField.focus(), 100);
+        });
+
+        // Close modal handlers
+        const closeModal = () => {
+            modal.classList.remove('show');
+            form.reset();
+        };
+
+        closeButton.addEventListener('click', closeModal);
+        cancelButton.addEventListener('click', closeModal);
+
+        // Close on backdrop click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('show')) {
+                closeModal();
+            }
+        });
+
+        // Send email
+        sendButton.addEventListener('click', async () => {
+            const formData = new FormData(form);
+            const to = formData.get('to').trim();
+            const subject = formData.get('subject').trim();
+            const message = formData.get('message').trim();
+
+            if (!to || !message) {
+                // Close modal temporarily to show alert, then reopen
+                modal.classList.remove('show');
+                await this.alertMethod('Please fill in the recipient and message fields.', 'Validation Error', null, 'OK');
+                modal.classList.add('show');
+                // Re-focus the appropriate field
+                const fieldToFocus = !to ? form.querySelector('input[name="to"]') : form.querySelector('textarea[name="message"]');
+                setTimeout(() => fieldToFocus.focus(), 100);
+                return;
+            }
+
+            // Disable send button and show loading state
+            const originalText = sendButton.textContent;
+            sendButton.disabled = true;
+            sendButton.textContent = 'Sending...';
+
+            try {
+                await this.sendMessage(to, subject, message);
+                // Close modal before showing success alert
+                closeModal();
+                await this.alertMethod('Email sent successfully!', 'Success', null, 'OK');
+            } catch (error) {
+                console.error('Failed to send email:', error);
+                // Close modal before showing error alert
+                modal.classList.remove('show');
+                const errorMessage = this._formatSendError(error);
+                await this.alertMethod(errorMessage, 'Send Error', null, 'OK');
+                
+                // Reopen modal with preserved values after error alert
+                modal.classList.add('show');
+                // Re-focus the To field to allow user to continue editing
+                const toField = form.querySelector('input[name="to"]');
+                setTimeout(() => toField.focus(), 100);
+            } finally {
+                // Re-enable send button
+                sendButton.disabled = false;
+                sendButton.textContent = originalText;
+            }
+        });
+
+        // Handle Enter key in form (Ctrl+Enter to send)
+        form.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                sendButton.click();
+            }
+        });
+    }
+
+    positionComposeButton() {
+        if (typeof document === 'undefined' || !this.container) {
+            return;
+        }
+
+        const composeButton = this.container.querySelector('.ee-compose-button');
+        if (!composeButton) {
+            return;
+        }
+
+        const updateButtonPosition = () => {
+            const containerRect = this.container.getBoundingClientRect();
+            const buttonSize = 56; // Button width/height
+            const margin = 20; // Desired margin from edges
+
+            // Calculate the ideal position (bottom-right of container with margin)
+            const idealBottom = window.innerHeight - containerRect.bottom + margin;
+            const idealRight = window.innerWidth - containerRect.right + margin;
+
+            // Ensure button stays within viewport bounds
+            const minBottom = margin;
+            const minRight = margin;
+
+            // Also ensure button stays within container horizontal bounds
+            const maxRight = window.innerWidth - containerRect.left - buttonSize - margin;
+
+            // Calculate final position
+            const bottom = Math.max(minBottom, idealBottom);
+            const right = Math.min(Math.max(minRight, idealRight), maxRight);
+
+            // Apply positioning
+            composeButton.style.bottom = `${bottom}px`;
+            composeButton.style.right = `${right}px`;
+        };
+
+        // Initial positioning
+        updateButtonPosition();
+
+        // Update position on scroll and resize
+        const updateWithThrottle = this.throttle(updateButtonPosition, 16); // ~60fps
+        window.addEventListener('scroll', updateWithThrottle);
+        window.addEventListener('resize', updateWithThrottle);
+
+        // Store cleanup function for potential future use
+        this._composeButtonCleanup = () => {
+            window.removeEventListener('scroll', updateWithThrottle);
+            window.removeEventListener('resize', updateWithThrottle);
+        };
+    }
+
+    throttle(func, limit) {
+        let inThrottle;
+        return function() {
+            const args = arguments;
+            const context = this;
+            if (!inThrottle) {
+                func.apply(context, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        }
     }
 
     init() {

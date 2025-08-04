@@ -5,25 +5,18 @@
     "main": "index.js",
     "module": "index.js",
     "type": "module",
-    "exports": {
-        ".": {
-            "import": "./index.js",
-            "require": "./index.cjs"
-        }
-    },
+    "exports": "./index.js",
     "files": [
         "index.js",
-        "index.cjs",
         "index.d.ts",
         "README.md",
         "LICENSE"
     ],
     "scripts": {
-        "build": "node build.js",
         "lint": "eslint *.js",
         "format": "prettier --write *.js *.json *.md",
         "format:check": "prettier --check *.js *.json *.md",
-        "prepublishOnly": "npm run lint && npm run format:check && npm run build"
+        "prepublishOnly": "npm run lint && npm run format:check"
     },
     "keywords": [
         "email",

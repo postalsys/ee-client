@@ -52,18 +52,6 @@ const { messages } = await client.loadMessages('INBOX');
 const message = await client.loadMessage(messages[0].id);
 ```
 
-### CommonJS
-
-```javascript
-const { EmailEngineClient } = require('@postalsys/ee-client');
-
-const client = new EmailEngineClient({
-    apiUrl: 'https://your-emailengine-server.com',
-    account: 'your-account-id',
-    accessToken: 'your-access-token'
-});
-```
-
 ## API
 
 ### Constructor Options
@@ -72,7 +60,8 @@ const client = new EmailEngineClient({
 - `account` (string, required): Account identifier
 - `accessToken` (string, optional): Access token for authentication
 - `container` (HTMLElement, optional): DOM container for UI components (browser only)
-- `confirmMethod` (function, optional): Custom confirm dialog method. Can be sync or async. Defaults to browser's `confirm()`
+- `confirmMethod` (function, optional): Custom confirm dialog method. Receives `(message, title, cancelText, okText)` parameters. Can be sync or async. Defaults to browser's `confirm()` with standard parameters.
+- `alertMethod` (function, optional): Custom alert dialog method. Receives `(message, title, cancelText, okText)` parameters where `cancelText` is `null` for alerts. Can be sync or async. Defaults to browser's `alert()` with standard parameters.
 
 ### Methods
 
@@ -99,6 +88,13 @@ Delete a message.
 #### `moveMessage(messageId: string, targetPath: string): Promise<boolean>`
 
 Move a message to another folder.
+
+#### `sendMessage(to: string | object | array, subject: string, text: string): Promise<object>`
+
+Send a new email message. The `to` parameter can be:
+- A string email address: `'user@example.com'`
+- An object with name and address: `{ name: 'John Doe', address: 'john@example.com' }`
+- An array of strings or objects for multiple recipients
 
 ## Browser UI
 
@@ -127,9 +123,9 @@ When used in a browser with a container element, the client automatically create
 </script>
 ```
 
-### Custom Confirm Dialog
+### Custom Dialog Methods
 
-You can provide a custom confirm dialog method that will be used instead of the browser's default `confirm()`. This is useful for integrating with UI frameworks or custom dialog systems:
+You can provide custom alert and confirm dialog methods that will be used instead of the browser's default dialogs. This is useful for integrating with UI frameworks or custom dialog systems:
 
 ```javascript
 const client = new EmailEngineClient({
@@ -137,29 +133,48 @@ const client = new EmailEngineClient({
     account: 'your-account-id',
     accessToken: 'your-access-token',
     container: document.getElementById('email-client'),
-    confirmMethod: async message => {
-        // Example with a custom async dialog
-        return await MyModal.confirm({
-            title: 'Confirm Action',
+    
+    // Custom alert method
+    alertMethod: async (message, title, cancelText, okText) => {
+        return await MyModal.alert({
+            title: title,           // e.g., "Success", "Error", "Notice"
             message: message,
-            buttons: ['Cancel', 'OK']
+            okButton: okText        // e.g., "OK"
+            // cancelText is null for alerts
+        });
+    },
+    
+    // Custom confirm method
+    confirmMethod: async (message, title, cancelText, okText) => {
+        return await MyModal.confirm({
+            title: title,           // e.g., "Delete Message", "Confirm"
+            message: message,
+            cancelButton: cancelText, // e.g., "Cancel"
+            okButton: okText        // e.g., "Delete", "OK"
         });
     }
 });
 ```
 
-The `confirmMethod` can be either synchronous or asynchronous:
+#### Dialog Method Signatures
 
-```javascript
-// Synchronous example
-confirmMethod: message => window.confirm(message);
+Both methods receive the same parameters:
+- `message` (string): The message to display
+- `title` (string): Dialog title (defaults: "Confirm" for confirm, "Notice" for alert)
+- `cancelText` (string|null): Cancel button text ("Cancel" for confirm, `null` for alert)
+- `okText` (string): OK/action button text (defaults: "OK")
 
-// Asynchronous example
-confirmMethod: async message => {
-    const result = await customDialog.show(message);
-    return result === 'ok';
-};
-```
+#### Built-in Dialog Types
+
+The library uses contextually appropriate titles and button texts:
+
+- **Validation errors**: `alertMethod(message, "Validation Error", null, "OK")`
+- **Success messages**: `alertMethod(message, "Success", null, "OK")`
+- **Send errors**: `alertMethod(message, "Send Error", null, "OK")`
+- **Download errors**: `alertMethod(message, "Download Error", null, "OK")`
+- **Delete confirmation**: `confirmMethod(message, "Delete Message", "Cancel", "Delete")`
+
+Both methods can be synchronous or asynchronous and should return a boolean for confirm dialogs.
 
 ## License
 
