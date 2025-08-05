@@ -4,8 +4,11 @@ export class EmailEngineClient {
         this.account = options.account;
         this.accessToken = options.accessToken;
         this.container = options.container;
-        this.confirmMethod = options.confirmMethod || ((message, _title = 'Confirm', _cancelText = 'Cancel', _okText = 'OK') => confirm(message));
-        this.alertMethod = options.alertMethod || ((message, _title = 'Notice', _cancelText = null, _okText = 'OK') => alert(message));
+        this.confirmMethod =
+            options.confirmMethod ||
+            ((message, _title = 'Confirm', _cancelText = 'Cancel', _okText = 'OK') => confirm(message));
+        this.alertMethod =
+            options.alertMethod || ((message, _title = 'Notice', _cancelText = null, _okText = 'OK') => alert(message));
 
         this.currentFolder = null;
         this.currentMessage = null;
@@ -13,6 +16,10 @@ export class EmailEngineClient {
         this.messages = [];
         this.nextPageCursor = null;
         this.prevPageCursor = null;
+
+        // Keep-alive timer for sess_ tokens
+        this.keepAliveTimer = null;
+        this.lastActivity = Date.now();
 
         // Get page size from localStorage or options or default
         const savedPageSize =
@@ -22,9 +29,15 @@ export class EmailEngineClient {
         if (this.container) {
             this.init();
         }
+
+        // Start keep-alive timer for sess_ tokens
+        this._startKeepAliveTimer();
     }
 
     async apiRequest(method, endpoint, data = null) {
+        // Update activity timestamp for keep-alive
+        this._updateActivity();
+        
         const url = `${this.apiUrl}${endpoint}`;
         const options = {
             method: method,
@@ -66,7 +79,7 @@ export class EmailEngineClient {
                 // If JSON parsing fails, fall back to status text
                 errorDetails = { message: response.statusText };
             }
-            
+
             const error = new Error(`API request failed: ${response.statusText}`);
             error.statusCode = response.status;
             error.details = errorDetails;
@@ -257,8 +270,8 @@ export class EmailEngineClient {
 
     async sendMessage(to, subject, text) {
         try {
-            const toAddresses = Array.isArray(to) 
-                ? to.map(addr => typeof addr === 'string' ? { address: addr } : addr)
+            const toAddresses = Array.isArray(to)
+                ? to.map(addr => (typeof addr === 'string' ? { address: addr } : addr))
                 : [typeof to === 'string' ? { address: to } : to];
 
             const messageData = {
@@ -296,7 +309,7 @@ export class EmailEngineClient {
             const fieldErrors = error.details.fields.map(field => {
                 // Try to make field errors more user-friendly
                 let message = field.message;
-                
+
                 // Map technical field names to user-friendly names
                 if (message.includes('to[0].address') || message.includes('"address"')) {
                     message = message.replace(/to\[\d+\]\.address|"address"/g, 'email address');
@@ -307,17 +320,17 @@ export class EmailEngineClient {
                 if (message.includes('"text"')) {
                     message = message.replace('"text"', 'message');
                 }
-                
+
                 return message;
             });
-            
+
             const mainMessage = error.details.message || 'Failed to send email';
             if (fieldErrors.length > 0) {
                 return `${mainMessage}:\n\n• ${fieldErrors.join('\n• ')}`;
             }
             return mainMessage;
         }
-        
+
         // Fallback to generic error message
         return 'Failed to send email. Please check your input and try again.';
     }
@@ -1337,7 +1350,12 @@ export class EmailEngineClient {
         });
 
         viewer.querySelector('[data-action="delete"]').addEventListener('click', async () => {
-            const result = await this.confirmMethod('Are you sure you want to delete this message? This action cannot be undone.', 'Delete Message', 'Cancel', 'Delete');
+            const result = await this.confirmMethod(
+                'Are you sure you want to delete this message? This action cannot be undone.',
+                'Delete Message',
+                'Cancel',
+                'Delete'
+            );
             if (result) {
                 this.deleteMessage(msg.id);
             }
@@ -1426,7 +1444,7 @@ export class EmailEngineClient {
 
         // Wire up compose modal events
         this.setupComposeModal();
-        
+
         // Position compose button correctly
         this.positionComposeButton();
     }
@@ -1461,14 +1479,14 @@ export class EmailEngineClient {
         cancelButton.addEventListener('click', closeModal);
 
         // Close on backdrop click
-        modal.addEventListener('click', (e) => {
+        modal.addEventListener('click', e => {
             if (e.target === modal) {
                 closeModal();
             }
         });
 
         // Close on Escape key
-        document.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', e => {
             if (e.key === 'Escape' && modal.classList.contains('show')) {
                 closeModal();
             }
@@ -1484,10 +1502,17 @@ export class EmailEngineClient {
             if (!to || !message) {
                 // Close modal temporarily to show alert, then reopen
                 modal.classList.remove('show');
-                await this.alertMethod('Please fill in the recipient and message fields.', 'Validation Error', null, 'OK');
+                await this.alertMethod(
+                    'Please fill in the recipient and message fields.',
+                    'Validation Error',
+                    null,
+                    'OK'
+                );
                 modal.classList.add('show');
                 // Re-focus the appropriate field
-                const fieldToFocus = !to ? form.querySelector('input[name="to"]') : form.querySelector('textarea[name="message"]');
+                const fieldToFocus = !to
+                    ? form.querySelector('input[name="to"]')
+                    : form.querySelector('textarea[name="message"]');
                 setTimeout(() => fieldToFocus.focus(), 100);
                 return;
             }
@@ -1508,7 +1533,7 @@ export class EmailEngineClient {
                 modal.classList.remove('show');
                 const errorMessage = this._formatSendError(error);
                 await this.alertMethod(errorMessage, 'Send Error', null, 'OK');
-                
+
                 // Reopen modal with preserved values after error alert
                 modal.classList.add('show');
                 // Re-focus the To field to allow user to continue editing
@@ -1522,7 +1547,7 @@ export class EmailEngineClient {
         });
 
         // Handle Enter key in form (Ctrl+Enter to send)
-        form.addEventListener('keydown', (e) => {
+        form.addEventListener('keydown', e => {
             if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
                 sendButton.click();
@@ -1582,15 +1607,15 @@ export class EmailEngineClient {
 
     throttle(func, limit) {
         let inThrottle;
-        return function() {
+        return function () {
             const args = arguments;
             const context = this;
             if (!inThrottle) {
                 func.apply(context, args);
                 inThrottle = true;
-                setTimeout(() => inThrottle = false, limit);
+                setTimeout(() => (inThrottle = false), limit);
             }
-        }
+        };
     }
 
     init() {
@@ -1614,6 +1639,51 @@ export class EmailEngineClient {
             .catch(error => {
                 console.error('Failed to auto-select inbox:', error);
             });
+    }
+
+    _updateActivity() {
+        this.lastActivity = Date.now();
+    }
+
+    _startKeepAliveTimer() {
+        // Only start keep-alive for sess_ tokens
+        if (!this.accessToken || !this.accessToken.startsWith('sess_')) {
+            return;
+        }
+
+        // Clear existing timer if any
+        if (this.keepAliveTimer) {
+            clearInterval(this.keepAliveTimer);
+        }
+
+        // Check every minute if we need to ping
+        this.keepAliveTimer = setInterval(() => {
+            const now = Date.now();
+            const idleTime = now - this.lastActivity;
+            
+            // If idle for 5+ minutes, ping to keep token alive
+            if (idleTime >= 5 * 60 * 1000) {
+                this._keepTokenAlive();
+            }
+        }, 60 * 1000); // Check every minute
+    }
+
+    async _keepTokenAlive() {
+        try {
+            // Ping account endpoint to keep token alive
+            await this.apiRequest('GET', `/v1/account/${this.account}`);
+            console.debug('Keep-alive ping sent for sess_ token');
+        } catch (error) {
+            console.warn('Keep-alive ping failed:', error.message);
+        }
+    }
+
+    destroy() {
+        // Clean up keep-alive timer
+        if (this.keepAliveTimer) {
+            clearInterval(this.keepAliveTimer);
+            this.keepAliveTimer = null;
+        }
     }
 }
 

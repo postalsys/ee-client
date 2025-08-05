@@ -63,6 +63,8 @@ const message = await client.loadMessage(messages[0].id);
 - `confirmMethod` (function, optional): Custom confirm dialog method. Receives `(message, title, cancelText, okText)` parameters. Can be sync or async. Defaults to browser's `confirm()` with standard parameters.
 - `alertMethod` (function, optional): Custom alert dialog method. Receives `(message, title, cancelText, okText)` parameters where `cancelText` is `null` for alerts. Can be sync or async. Defaults to browser's `alert()` with standard parameters.
 
+**Note**: For session tokens (starting with `sess_`), the client automatically implements a keep-alive mechanism that pings the `/v1/account/{account}` endpoint every 5 minutes of inactivity to prevent token expiration.
+
 ### Methods
 
 #### `loadFolders(): Promise<Folder[]>`
@@ -92,9 +94,14 @@ Move a message to another folder.
 #### `sendMessage(to: string | object | array, subject: string, text: string): Promise<object>`
 
 Send a new email message. The `to` parameter can be:
+
 - A string email address: `'user@example.com'`
 - An object with name and address: `{ name: 'John Doe', address: 'john@example.com' }`
 - An array of strings or objects for multiple recipients
+
+#### `destroy(): void`
+
+Clean up the client instance, clearing any active timers (like the keep-alive timer for session tokens).
 
 ## Browser UI
 
@@ -133,24 +140,24 @@ const client = new EmailEngineClient({
     account: 'your-account-id',
     accessToken: 'your-access-token',
     container: document.getElementById('email-client'),
-    
+
     // Custom alert method
     alertMethod: async (message, title, cancelText, okText) => {
         return await MyModal.alert({
-            title: title,           // e.g., "Success", "Error", "Notice"
+            title: title, // e.g., "Success", "Error", "Notice"
             message: message,
-            okButton: okText        // e.g., "OK"
+            okButton: okText // e.g., "OK"
             // cancelText is null for alerts
         });
     },
-    
+
     // Custom confirm method
     confirmMethod: async (message, title, cancelText, okText) => {
         return await MyModal.confirm({
-            title: title,           // e.g., "Delete Message", "Confirm"
+            title: title, // e.g., "Delete Message", "Confirm"
             message: message,
             cancelButton: cancelText, // e.g., "Cancel"
-            okButton: okText        // e.g., "Delete", "OK"
+            okButton: okText // e.g., "Delete", "OK"
         });
     }
 });
@@ -159,6 +166,7 @@ const client = new EmailEngineClient({
 #### Dialog Method Signatures
 
 Both methods receive the same parameters:
+
 - `message` (string): The message to display
 - `title` (string): Dialog title (defaults: "Confirm" for confirm, "Notice" for alert)
 - `cancelText` (string|null): Cancel button text ("Cancel" for confirm, `null` for alert)
