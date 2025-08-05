@@ -21,6 +21,12 @@ export class EmailEngineClient {
         this.keepAliveTimer = null;
         this.lastActivity = Date.now();
 
+        // Dark mode state
+        this.darkMode = false;
+        if (typeof window !== 'undefined' && window.localStorage) {
+            this.darkMode = localStorage.getItem('ee-client-dark-mode') === 'true';
+        }
+
         // Get page size from localStorage or options or default
         const savedPageSize =
             typeof window !== 'undefined' && window.localStorage ? localStorage.getItem('ee-client-page-size') : null;
@@ -37,7 +43,7 @@ export class EmailEngineClient {
     async apiRequest(method, endpoint, data = null) {
         // Update activity timestamp for keep-alive
         this._updateActivity();
-        
+
         const url = `${this.apiUrl}${endpoint}`;
         const options = {
             method: method,
@@ -177,6 +183,15 @@ export class EmailEngineClient {
 
             if (this.container) {
                 this.renderMessage();
+                
+                // Scroll to top of the email client container
+                this.container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                // Also scroll the window to ensure visibility
+                if (typeof window !== 'undefined') {
+                    const containerTop = this.container.getBoundingClientRect().top + window.pageYOffset;
+                    window.scrollTo({ top: containerTop, behavior: 'smooth' });
+                }
             }
 
             return this.currentMessage;
@@ -1035,6 +1050,219 @@ export class EmailEngineClient {
             .ee-compose-cancel:hover {
                 background: #545b62;
             }
+
+            /* Dark mode toggle button */
+            .ee-dark-mode-toggle {
+                position: absolute;
+                top: 8px;
+                right: 16px;
+                background: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 3px;
+                padding: 6px 10px;
+                font-size: 12px;
+                cursor: pointer;
+                z-index: 100;
+                transition: all 0.2s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: #495057;
+                font-weight: 500;
+            }
+
+            .ee-dark-mode-toggle:hover {
+                background: #e9ecef;
+                border-color: #adb5bd;
+            }
+
+            .ee-dark-mode-icon {
+                font-size: 14px;
+                line-height: 1;
+            }
+
+            /* Dark mode styles */
+            .ee-dark-mode {
+                background: #1a1a1a;
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-dark-mode-toggle {
+                background: #333;
+                border-color: #444;
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-dark-mode-toggle:hover {
+                background: #444;
+                border-color: #555;
+            }
+
+            .ee-dark-mode .ee-sidebar {
+                background: #202020;
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-folder-item {
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-folder-item:hover {
+                background: #2a2a2a;
+            }
+
+            .ee-dark-mode .ee-folder-item.active {
+                background: #0056b3;
+            }
+
+            .ee-dark-mode .ee-message-list {
+                background: #202020;
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-message-item {
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-message-item:hover {
+                background: #2a2a2a;
+            }
+
+            .ee-dark-mode .ee-message-item.active {
+                background: #1a3d5c;
+            }
+
+            .ee-dark-mode .ee-message-date,
+            .ee-dark-mode .ee-message-preview,
+            .ee-dark-mode .ee-attachment-indicator {
+                color: #999;
+            }
+
+            .ee-dark-mode .ee-pane-header {
+                background: linear-gradient(to bottom, #2a2a2a, #252525);
+                border-color: #333;
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-pane-title {
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-page-size-label {
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-message-viewer {
+                background: #1a1a1a;
+            }
+
+            .ee-dark-mode .ee-message-actions {
+                background: linear-gradient(to bottom, #2a2a2a, #252525);
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-button {
+                background: #333;
+                border-color: #444;
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-button:hover {
+                background: #444;
+                border-color: #555;
+            }
+
+            .ee-dark-mode .ee-button:disabled {
+                background: #222;
+                color: #666;
+            }
+
+            .ee-dark-mode select {
+                background: #2a2a2a;
+                border-color: #444;
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-message-content {
+                background: #1a1a1a;
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-attachments {
+                background: #252525;
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-attachment-item {
+                background: #2a2a2a;
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-attachment-item:hover {
+                background: #333;
+            }
+
+            .ee-dark-mode .ee-loading,
+            .ee-dark-mode .ee-empty-state,
+            .ee-dark-mode .ee-error {
+                color: #999;
+            }
+
+            .ee-dark-mode .ee-pagination {
+                background: #252525;
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-compose-button {
+                background: #0056b3;
+            }
+
+            .ee-dark-mode .ee-compose-modal {
+                background: rgba(0, 0, 0, 0.7);
+            }
+
+            .ee-dark-mode .ee-compose-content {
+                background: #202020;
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-compose-header {
+                background: linear-gradient(to bottom, #2a2a2a, #252525);
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-compose-close {
+                color: #999;
+            }
+
+            .ee-dark-mode .ee-compose-close:hover {
+                color: #fff;
+            }
+
+            .ee-dark-mode .ee-compose-input,
+            .ee-dark-mode .ee-compose-textarea {
+                background: #1a1a1a;
+                border-color: #444;
+                color: #e0e0e0;
+            }
+
+            .ee-dark-mode .ee-compose-input:focus,
+            .ee-dark-mode .ee-compose-textarea:focus {
+                border-color: #0056b3;
+                box-shadow: 0 0 0 2px rgba(0,86,179,0.2);
+            }
+
+            .ee-dark-mode .ee-compose-actions {
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-compose-cancel {
+                background: #444;
+            }
+
+            .ee-dark-mode .ee-compose-cancel:hover {
+                background: #555;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -1381,11 +1609,7 @@ export class EmailEngineClient {
             });
         });
 
-        // Scroll message viewer back to top when new email is displayed
-        const messageContent = viewer.querySelector('.ee-message-content');
-        if (messageContent) {
-            messageContent.scrollTop = 0;
-        }
+        // Message content scrolling is now handled in loadMessage method
     }
 
     createLayout() {
@@ -1394,7 +1618,10 @@ export class EmailEngineClient {
         }
 
         this.container.innerHTML = `
-            <div class="ee-client">
+            <div class="ee-client${this.darkMode ? ' ee-dark-mode' : ''}">
+                <button class="ee-dark-mode-toggle" title="Toggle dark mode">
+                    <span class="ee-dark-mode-icon">${this.darkMode ? '☀️' : '🌙'}</span>
+                </button>
                 <div class="ee-sidebar">
                     <div class="ee-pane-header">
                         <span class="ee-pane-title">Folders</span>
@@ -1626,6 +1853,13 @@ export class EmailEngineClient {
 
         this.createStyles();
         this.createLayout();
+        
+        // Set up dark mode toggle
+        const toggleBtn = this.container.querySelector('.ee-dark-mode-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => this.toggleDarkMode());
+        }
+        
         this.loadFolders()
             .then(() => {
                 const inbox =
@@ -1660,7 +1894,7 @@ export class EmailEngineClient {
         this.keepAliveTimer = setInterval(() => {
             const now = Date.now();
             const idleTime = now - this.lastActivity;
-            
+
             // If idle for 5+ minutes, ping to keep token alive
             if (idleTime >= 5 * 60 * 1000) {
                 this._keepTokenAlive();
@@ -1675,6 +1909,31 @@ export class EmailEngineClient {
             console.debug('Keep-alive ping sent for sess_ token');
         } catch (error) {
             console.warn('Keep-alive ping failed:', error.message);
+        }
+    }
+
+    toggleDarkMode() {
+        this.darkMode = !this.darkMode;
+        
+        // Save preference
+        if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.setItem('ee-client-dark-mode', this.darkMode.toString());
+        }
+        
+        // Update UI
+        const client = this.container.querySelector('.ee-client');
+        if (client) {
+            if (this.darkMode) {
+                client.classList.add('ee-dark-mode');
+            } else {
+                client.classList.remove('ee-dark-mode');
+            }
+        }
+        
+        // Update toggle button icon
+        const icon = this.container.querySelector('.ee-dark-mode-icon');
+        if (icon) {
+            icon.textContent = this.darkMode ? '☀️' : '🌙';
         }
     }
 

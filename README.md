@@ -111,6 +111,7 @@ When used in a browser with a container element, the client automatically create
 - Message list with pagination
 - Message viewer with actions (mark as read/unread, delete, move)
 - Responsive design
+- Dark mode support with persistent preference
 
 ```html
 <div id="email-client" style="height: 600px;"></div>
@@ -183,6 +184,16 @@ The library uses contextually appropriate titles and button texts:
 - **Delete confirmation**: `confirmMethod(message, "Delete Message", "Cancel", "Delete")`
 
 Both methods can be synchronous or asynchronous and should return a boolean for confirm dialogs.
+
+### Dark Mode
+
+The email client includes built-in dark mode support with automatic persistence of user preference:
+
+- **Toggle Button**: A moon/sun icon in the top-right corner toggles between light and dark modes
+- **Persistent Preference**: Dark mode preference is saved to localStorage and restored on page reload
+- **Complete Theme**: All UI components are styled for optimal readability in both light and dark modes
+
+Dark mode is automatically initialized based on the saved preference when the client is created.
 
 ## License
 
