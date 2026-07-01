@@ -1,0 +1,4 @@
+# Machine-generated files - not hand-formatted, and excluded here so that
+# `prettier --check` (run by prepublishOnly and CI) does not fail on them.
+CHANGELOG.md
+package-lock.json
