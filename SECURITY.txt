@@ -1,3 +1,6 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA256
+
 Contact: https://github.com/postalsys/ee-client/security/advisories/new
 Contact: mailto:andris@postalsys.com
 Expires: 2027-06-01T00:00:00.000Z
@@ -5,3 +8,20 @@ Encryption: https://keys.openpgp.org/vks/v1/by-fingerprint/5D952A46E1D8C931F6364
 Preferred-Languages: en, et
 Canonical: https://github.com/postalsys/ee-client/blob/master/SECURITY.txt
 Policy: https://github.com/postalsys/ee-client/blob/master/SECURITY.md
+-----BEGIN PGP SIGNATURE-----
+
+iQJPBAEBCAA5FiEEXZUqRuHYyTH2Nk4B3GyD9NWE02QFAmpFgRsbFIAAAAAABAAO
+bWFudTIsMi41KzEuMTIsMCwzAAoJENxsg/TVhNNkO0wP/iYZLVJmjrVfeuBnabUa
+P2gAXY44V3yR84Jq3WrHUt7ne6v6vMRzNSF+nOBO/pdU+YJPKiw4HaayIM0k5VSG
+bqq1Mg3QPSVdvOVNwG01G0FQNAyiKU7Yk+Q0p/YcgVZWHCe8C1j+30JHzHCLwHae
+wtYLDuSgXb4fsArfQk71B+48r+lBrSEDz52diXuKy1zLSm6tYacmEpC/kKPVpeut
+hi7sYbaphoiJONeSqf5CHh/7FIq+wMfkRLc/Ll/sAdwO297mPDB8QjTweIl596VO
+qvrneZ+uR6PQu78F3v+3xZe7YlCPeHfDB+Dn0khsQZxZO/qygeqqVWzGEcQDQ/2s
+urfJNMzcoBICwlRv1gfZcSU0rq5WFCbLDr6VyXwWtL7e2JeH7XhSigTsDZBp5903
+3lD111UAYD0gui7X239uw9VkyYpKQf+T2nHCiqdb0bwyWv3FnG0feSvUeaYVMDPh
+Yjc7qav7GqAJDVq7Vq5+qh7Kuf2F6otTCVdBc9ZOM2obz/y/EuRwBRmuP5lybtIP
+Wx3uI/6BnfhX4gmHbZ+KrR9KYrmOweABHuelyCnfYCQVurtsHz3bMTQ7TCK19PLx
+WmSmA0sjSfVNmExx2PKdnm2sc03jAetVfjZKJEraQ4JTs/MzVaX3631brgZReNKZ
+aYIeY+vrljx/nIn4NFvVltas
+=L09N
+-----END PGP SIGNATURE-----
