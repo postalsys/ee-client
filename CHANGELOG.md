@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.2](https://github.com/postalsys/ee-client/compare/v1.3.1...v1.3.2) (2026-07-01)
+
+
+### Bug Fixes
+
+* exclude generated CHANGELOG.md and lockfile from prettier check ([eb2c73b](https://github.com/postalsys/ee-client/commit/eb2c73bb573185feca8501046b72da2f8ad3f5c7))
+
 ## [1.3.1](https://github.com/postalsys/ee-client/compare/v1.3.0...v1.3.1) (2026-07-01)
 
 
