@@ -1,0 +1,33 @@
+on:
+    push:
+        branches:
+            - master
+
+permissions:
+    contents: write
+    pull-requests: write
+    id-token: write
+
+name: release
+jobs:
+    release-please:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: googleapis/release-please-action@v4
+              id: release
+              with:
+                  config-file: release-please-config.json
+                  manifest-file: .release-please-manifest.json
+            # The steps below publish to npm only when the release PR is merged
+            # (i.e. a new release was actually created):
+            - uses: actions/checkout@v6
+              if: ${{ steps.release.outputs.release_created }}
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: 24
+                  registry-url: "https://registry.npmjs.org"
+              if: ${{ steps.release.outputs.release_created }}
+            - run: npm ci
+              if: ${{ steps.release.outputs.release_created }}
+            - run: npm publish --provenance --access public
+              if: ${{ steps.release.outputs.release_created }}

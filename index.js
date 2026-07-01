@@ -183,10 +183,10 @@ export class EmailEngineClient {
 
             if (this.container) {
                 this.renderMessage();
-                
+
                 // Scroll to top of the email client container
                 this.container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                
+
                 // Also scroll the window to ensure visibility
                 if (typeof window !== 'undefined') {
                     const containerTop = this.container.getBoundingClientRect().top + window.pageYOffset;
@@ -1861,13 +1861,13 @@ export class EmailEngineClient {
 
         this.createStyles();
         this.createLayout();
-        
+
         // Set up dark mode toggle
         const toggleBtn = this.container.querySelector('.ee-dark-mode-toggle');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', () => this.toggleDarkMode());
         }
-        
+
         this.loadFolders()
             .then(() => {
                 const inbox =
@@ -1922,12 +1922,12 @@ export class EmailEngineClient {
 
     toggleDarkMode() {
         this.darkMode = !this.darkMode;
-        
+
         // Save preference
         if (typeof window !== 'undefined' && window.localStorage) {
             localStorage.setItem('ee-client-dark-mode', this.darkMode.toString());
         }
-        
+
         // Update UI
         const client = this.container.querySelector('.ee-client');
         if (client) {
@@ -1937,7 +1937,7 @@ export class EmailEngineClient {
                 client.classList.remove('ee-dark-mode');
             }
         }
-        
+
         // Update toggle button icon
         const icon = this.container.querySelector('.ee-dark-mode-icon');
         if (icon) {

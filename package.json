@@ -16,6 +16,8 @@
         "lint": "eslint *.js",
         "format": "prettier --write *.js *.json *.md",
         "format:check": "prettier --check *.js *.json *.md",
+        "test": "npm run lint && npm run format:check",
+        "update": "rm -rf node_modules package-lock.json && ncu -u && npm install",
         "prepublishOnly": "npm run lint && npm run format:check"
     },
     "keywords": [
