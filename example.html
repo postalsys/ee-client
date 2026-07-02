@@ -146,7 +146,7 @@
     <div class="config-form" id="config-form">
         <h2>Configure EmailEngine Client</h2>
         <div class="saved-config" id="saved-config">
-            Using saved configuration. <a href="#" onclick="clearConfig(); return false;">Clear</a>
+            Using saved configuration. <a href="#" id="clear-config">Clear</a>
         </div>
         
         <form id="setup-form">
@@ -170,7 +170,7 @@
             
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Connect to EmailEngine</button>
-                <button type="button" class="btn btn-secondary" onclick="loadTestData()">Load Test Values</button>
+                <button type="button" class="btn btn-secondary" id="load-test">Load Test Values</button>
             </div>
             
             <div class="error-message" id="error-message"></div>
@@ -254,6 +254,13 @@
             document.getElementById('accountId').value = '';
             document.getElementById('accessToken').value = '';
         }
+
+        // Wire up buttons (inline onclick cannot reach functions declared in a module)
+        document.getElementById('load-test').addEventListener('click', loadTestData);
+        document.getElementById('clear-config').addEventListener('click', function(e) {
+            e.preventDefault();
+            clearConfig();
+        });
         
         // Add back button functionality
         document.addEventListener('keydown', function(e) {
@@ -262,6 +269,7 @@
                     document.getElementById('config-form').style.display = 'block';
                     document.getElementById('email-client').style.display = 'none';
                     document.getElementById('email-client').innerHTML = '';
+                    client.destroy();
                     client = null;
                 }
             }

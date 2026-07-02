@@ -26,6 +26,18 @@ export interface Folder {
     status?: MessageStatus;
 }
 
+export interface FolderTreeEntry {
+    folder: Folder;
+    depth: number;
+}
+
+export interface Attachment {
+    id: string;
+    filename?: string;
+    contentType?: string;
+    size?: number;
+}
+
 export interface Message {
     id: string;
     subject?: string;
@@ -36,6 +48,7 @@ export interface Message {
     unseen: boolean;
     intro?: string;
     text?: MessageText;
+    attachments?: Attachment[];
 }
 
 export interface MessageListResponse {
@@ -44,20 +57,40 @@ export interface MessageListResponse {
     prevPageCursor?: string;
 }
 
+export type SendRecipient = string | EmailAddress;
+
+/**
+ * Custom dialog handler. Invoked by the client as
+ * `(message, title, cancelText, okText)`; `cancelText` is `null` for alerts.
+ * May be synchronous or asynchronous. Confirm handlers should resolve to a boolean.
+ */
+export type DialogMethod = (
+    message: string,
+    title?: string,
+    cancelText?: string | null,
+    okText?: string
+) => boolean | void | Promise<boolean | void>;
+
 export interface EmailEngineClientOptions {
     apiUrl?: string;
     account: string;
     accessToken?: string;
     container?: HTMLElement;
     containerId?: string;
-    confirmMethod?: (message: string) => boolean | Promise<boolean>;
+    pageSize?: number;
+    confirmMethod?: DialogMethod;
+    alertMethod?: DialogMethod;
 }
 
 export declare class EmailEngineClient {
     apiUrl: string;
     account: string;
     accessToken?: string;
-    container?: HTMLElement;
+    container?: HTMLElement | null;
+    confirmMethod: DialogMethod;
+    alertMethod: DialogMethod;
+    pageSize: number;
+    darkMode: boolean;
     currentFolder: string | null;
     currentMessage: Message | null;
     folders: Folder[];
@@ -74,17 +107,23 @@ export declare class EmailEngineClient {
     markAsRead(messageId: string, seen?: boolean): Promise<boolean>;
     deleteMessage(messageId: string): Promise<boolean>;
     moveMessage(messageId: string, targetPath: string): Promise<boolean>;
+    sendMessage(to: SendRecipient | SendRecipient[], subject: string, text: string): Promise<any>;
+    downloadAttachment(attachmentId: string, suggestedFilename?: string): Promise<void>;
+    downloadOriginalMessage(messageId: string, subject?: string): Promise<void>;
     formatDate(dateStr: string): string;
+    formatFileSize(bytes: number): string;
+    escapeHtml(value: unknown): string;
     createStyles(): void;
-    calculateFolderDepth(folder: Folder): number;
-    buildFolderTree(): Folder[];
+    buildFolderTree(): FolderTreeEntry[];
     renderFolderList(): void;
     renderMessageList(): void;
     renderMessage(): void;
     createLayout(): void;
     init(): void;
+    toggleDarkMode(): void;
+    destroy(): void;
 }
 
-export declare function createEmailEngineClient(options: EmailEngineClientOptions | string | HTMLElement): EmailEngineClient;
+export declare function createEmailEngineClient(options: EmailEngineClientOptions): EmailEngineClient;
 
 export default EmailEngineClient;

@@ -129,7 +129,7 @@ UI rendering, the compose modal, and dark mode only activate when a `container` 
 
 ### Factory helper
 
-`createEmailEngineClient()` is a convenience wrapper that also accepts a container element or an element id, and validates that `account` is present:
+`createEmailEngineClient()` is a convenience wrapper that resolves a `containerId` to its DOM element and validates that `account` is present:
 
 ```javascript
 import { createEmailEngineClient } from '@postalsys/ee-client';
