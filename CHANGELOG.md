@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.3](https://github.com/postalsys/ee-client/compare/v1.3.2...v1.3.3) (2026-07-02)
+
+
+### Bug Fixes
+
+* rewrite README with accurate EmailEngine usage, auth, and API docs ([d345939](https://github.com/postalsys/ee-client/commit/d3459397b3034f98999a71faa2a7bfa1f346f55f))
+
 ## [1.3.2](https://github.com/postalsys/ee-client/compare/v1.3.1...v1.3.2) (2026-07-01)
 
 
