@@ -15,9 +15,12 @@ concurrency:
 
 jobs:
     test:
-        # Skip on release-please commits, which carry [skip-ci] in the subject.
+        # Skip the release-please release commit, whose subject is
+        # "chore(master): release X.Y.Z [skip-ci]". Anchor on the subject
+        # prefix with startsWith - matching the whole message would also skip
+        # any ordinary commit that merely mentions [skip-ci] in its body.
         # release.yaml is intentionally not guarded so publishing still runs.
-        if: ${{ !contains(github.event.head_commit.message, '[skip-ci]') }}
+        if: "${{ !startsWith(github.event.head_commit.message, 'chore(master): release') }}"
         runs-on: ubuntu-latest
         strategy:
             matrix:
