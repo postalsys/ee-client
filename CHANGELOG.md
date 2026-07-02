@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/postalsys/ee-client/compare/v1.3.3...v1.4.0) (2026-07-02)
+
+
+### Features
+
+* harden client lifecycle, folder-tree rendering, and error paths ([d196ff0](https://github.com/postalsys/ee-client/commit/d196ff02ed751d5777863b8a0819a7993609c0b3))
+
 ## [1.3.3](https://github.com/postalsys/ee-client/compare/v1.3.2...v1.3.3) (2026-07-02)
 
 
