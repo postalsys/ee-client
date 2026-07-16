@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/postalsys/ee-client/compare/v1.4.0...v1.5.0) (2026-07-16)
+
+
+### Features
+
+* allow host applications to control dark mode ([b8a2f13](https://github.com/postalsys/ee-client/commit/b8a2f13e6d0ff3511dc7700a6109d2fd8024f0e6))
+
 ## [1.4.0](https://github.com/postalsys/ee-client/compare/v1.3.3...v1.4.0) (2026-07-02)
 
 
