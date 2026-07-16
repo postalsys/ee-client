@@ -115,15 +115,17 @@ EmailEngine can also mint short-lived, session-bound tokens whose value starts w
 new EmailEngineClient(options);
 ```
 
-| Option          | Type          | Default                 | Description                                                                                             |
-| --------------- | ------------- | ----------------------- | ------------------------------------------------------------------------------------------------------- |
-| `account`       | `string`      | (required)              | EmailEngine account identifier.                                                                         |
-| `apiUrl`        | `string`      | `http://127.0.0.1:3000` | Base URL of your EmailEngine instance.                                                                  |
-| `accessToken`   | `string`      | -                       | Bearer token for API authentication.                                                                    |
-| `container`     | `HTMLElement` | -                       | DOM element to render the webmail UI into. Omit for API-only use.                                       |
-| `pageSize`      | `number`      | `20`                    | Messages per page. A saved value in `localStorage` takes precedence.                                    |
-| `confirmMethod` | `function`    | browser `confirm()`     | Custom confirm dialog, `(message, title, cancelText, okText)`. May be sync or async; returns a boolean. |
-| `alertMethod`   | `function`    | browser `alert()`       | Custom alert dialog, `(message, title, cancelText, okText)` where `cancelText` is `null`.               |
+| Option               | Type          | Default                 | Description                                                                                                                                                                       |
+| -------------------- | ------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `account`            | `string`      | (required)              | EmailEngine account identifier.                                                                                                                                                   |
+| `apiUrl`             | `string`      | `http://127.0.0.1:3000` | Base URL of your EmailEngine instance.                                                                                                                                            |
+| `accessToken`        | `string`      | -                       | Bearer token for API authentication.                                                                                                                                              |
+| `container`          | `HTMLElement` | -                       | DOM element to render the webmail UI into. Omit for API-only use.                                                                                                                 |
+| `pageSize`           | `number`      | `20`                    | Messages per page. A saved value in `localStorage` takes precedence.                                                                                                              |
+| `confirmMethod`      | `function`    | browser `confirm()`     | Custom confirm dialog, `(message, title, cancelText, okText)`. May be sync or async; returns a boolean.                                                                           |
+| `alertMethod`        | `function`    | browser `alert()`       | Custom alert dialog, `(message, title, cancelText, okText)` where `cancelText` is `null`.                                                                                         |
+| `darkMode`           | `boolean`     | stored preference       | Initial dark mode. Overrides the preference stored by the builtin toggle.                                                                                                         |
+| `showDarkModeToggle` | `boolean`     | `true`                  | Render the builtin dark mode toggle. Set `false` when the host application drives the mode through `client.setDarkMode(enabled)` (for example in sync with its own theme switch). |
 
 UI rendering, the compose modal, and dark mode only activate when a `container` is supplied. In a non-browser environment the UI is skipped and the instance behaves as a plain API client.
 
@@ -186,6 +188,10 @@ Browser only. Fetch an attachment and trigger a download, using the filename fro
 ### `downloadOriginalMessage(messageId: string, subject?: string): Promise<void>`
 
 Browser only. Download the raw message source as an `.eml` file.
+
+### `setDarkMode(enabled: boolean): void`
+
+Set dark mode from the host application without touching the preference stored by the builtin toggle. Combine with `showDarkModeToggle: false` to keep the rendered UI in sync with the host page's own theme switch.
 
 ### `destroy(): void`
 

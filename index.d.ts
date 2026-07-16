@@ -80,6 +80,10 @@ export interface EmailEngineClientOptions {
     pageSize?: number;
     confirmMethod?: DialogMethod;
     alertMethod?: DialogMethod;
+    /** Initial dark mode; overrides the preference stored by the builtin toggle */
+    darkMode?: boolean;
+    /** Render the builtin dark mode toggle button (default true); set false when the host drives the mode through setDarkMode() */
+    showDarkModeToggle?: boolean;
 }
 
 export declare class EmailEngineClient {
@@ -91,6 +95,7 @@ export declare class EmailEngineClient {
     alertMethod: DialogMethod;
     pageSize: number;
     darkMode: boolean;
+    showDarkModeToggle: boolean;
     currentFolder: string | null;
     currentMessage: Message | null;
     folders: Folder[];
@@ -120,6 +125,7 @@ export declare class EmailEngineClient {
     renderMessage(): void;
     createLayout(): void;
     init(): void;
+    setDarkMode(enabled: boolean): void;
     toggleDarkMode(): void;
     destroy(): void;
 }
