@@ -1,7 +1,0 @@
-name: "ee-client CodeQL config"
-
-# Exclude code that is not part of the published runtime from analysis.
-# example.html is an illustrative browser demo, not shipped code, and only
-# generates false-positive noise.
-paths-ignore:
-    - example.html
