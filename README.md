@@ -157,7 +157,7 @@ Load a page of messages from a folder. Pass `nextPageCursor` / `prevPageCursor` 
 
 ### `loadMessage(messageId: string): Promise<Message>`
 
-Load a single message. HTML is requested with `webSafeHtml=true`, so EmailEngine returns it pre-processed with inline images embedded for safe display, and the message is marked as seen.
+Load a single message. HTML is requested with `webSafeHtml=true`, so EmailEngine returns it pre-processed with inline images embedded for safe display, and the message is marked as seen. Web-safe HTML also folds quoted thread history (reply history, forwarded content, disclaimers) into a `<details class="ee-collapsed-thread">` element - see [Quoted thread history](#quoted-thread-history).
 
 ### `markAsRead(messageId: string, seen?: boolean): Promise<boolean>`
 
@@ -204,8 +204,15 @@ When a `container` is provided the client builds a full webmail interface:
 - Folder tree with special-folder ordering (Inbox, Drafts, Sent, Trash, Junk, Archive) and nested folders
 - Paginated message list with a selectable page size (persisted to `localStorage`)
 - Message viewer with mark read/unread, delete, move-to-folder, download original, and attachment downloads
+- Quoted thread history collapsed behind a "Show quoted text" control
 - Compose modal (floating button) for sending plain-text mail
 - Dark mode toggle with the preference persisted to `localStorage`
+
+### Quoted thread history
+
+EmailEngine's web-safe HTML wraps the quoted tail of a reply - reply history, forwarded content, disclaimers - in a single `<details class="ee-collapsed-thread">` element with an empty `<summary class="ee-collapsed-thread-toggle">`, leaving the label to the renderer. The message viewer labels that summary ("Show quoted text" / "Hide quoted text") and styles it as a button, so only what the sender actually wrote is visible until the reader asks for the rest. Messages with no quoted tail carry no such element and render unchanged.
+
+Operators can turn the folding off server side with `EENGINE_DISABLE_THREAD_COLLAPSE=true`; older EmailEngine versions simply never emit the element.
 
 ### Custom dialogs
 
