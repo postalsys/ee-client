@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/postalsys/ee-client/compare/v1.5.0...v1.6.0) (2026-07-27)
+
+
+### Features
+
+* collapse quoted thread history behind a show/hide control ([79989fd](https://github.com/postalsys/ee-client/commit/79989fd3aad630d6b02b7f7189e139e254d0db5d))
+
 ## [1.5.0](https://github.com/postalsys/ee-client/compare/v1.4.0...v1.5.0) (2026-07-16)
 
 
