@@ -43,7 +43,7 @@
     },
     "devDependencies": {
         "eslint": "^8.57.1",
-        "prettier": "^3.9.5"
+        "prettier": "^3.9.6"
     },
     "peerDependencies": {
         "node-fetch": "^3.0.0"
