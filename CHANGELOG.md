@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.0](https://github.com/postalsys/ee-client/compare/v1.6.0...v1.7.0) (2026-07-30)
+
+
+### Features
+
+* send stored drafts and save composed mail as drafts ([f5de477](https://github.com/postalsys/ee-client/commit/f5de477ed58bab118e03f6b36d466613935d8a8d))
+
+
+### Bug Fixes
+
+* keep the compose button visible when the client starts in a hidden container ([0279ff5](https://github.com/postalsys/ee-client/commit/0279ff5a85558d99cf4c501008509ea8a32a33f9))
+
 ## [1.6.0](https://github.com/postalsys/ee-client/compare/v1.5.0...v1.6.0) (2026-07-27)
 
 
