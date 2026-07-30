@@ -181,6 +181,16 @@ Send a plain-text email. `to` may be:
 
 Resolves to EmailEngine's submit response.
 
+### `saveDraft(to?, subject?, text?): Promise<object>`
+
+Store a plain-text message as a draft instead of sending it (`POST /v1/account/{account}/message`). The message is uploaded to the account's Drafts special-use folder with the `\Draft` flag set and the account's own name and address as the sender, so it can later be delivered with `submitDraft()`. `to` accepts the same values as `sendMessage()` and may be omitted for a draft without recipients. Resolves to EmailEngine's upload response (`{ id, path, uid, ... }`).
+
+### `submitDraft(messageId: string, options?: SubmitDraftOptions): Promise<object>`
+
+Send an existing draft message as-is (`POST /v1/account/{account}/message/{message}/submit`). The message must be a draft: stored in the Drafts folder or flagged as a draft (IMAP), carrying the DRAFT label (Gmail), or a draft message (MS Graph). The provider removes the draft once it has been sent and files the sent copy into the Sent Mail folder. Requires EmailEngine v2.76.0 or later.
+
+The optional `options` object mirrors the API's SubmitDraft payload (`envelope`, `copy`, `sentMailPath`, `sendAt`, ...). Resolves to EmailEngine's submit response (`{ response, messageId, queueId, sendAt }`).
+
 ### `downloadAttachment(attachmentId: string, suggestedFilename?: string): Promise<void>`
 
 Browser only. Fetch an attachment and trigger a download, using the filename from the `Content-Disposition` header when available.
@@ -204,8 +214,9 @@ When a `container` is provided the client builds a full webmail interface:
 - Folder tree with special-folder ordering (Inbox, Drafts, Sent, Trash, Junk, Archive) and nested folders
 - Paginated message list with a selectable page size (persisted to `localStorage`)
 - Message viewer with mark read/unread, delete, move-to-folder, download original, and attachment downloads
+- Draft messages show a "Send Draft" button that submits the stored draft for delivery after confirmation (requires EmailEngine v2.76.0 or later; editing the draft first is not supported)
 - Quoted thread history collapsed behind a "Show quoted text" control
-- Compose modal (floating button) for sending plain-text mail
+- Compose modal (floating button) for sending plain-text mail, with a Save Draft option that stores the message in the Drafts folder instead of sending it
 - Dark mode toggle with the preference persisted to `localStorage`
 
 ### Quoted thread history

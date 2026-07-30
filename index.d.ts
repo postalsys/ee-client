@@ -46,6 +46,9 @@ export interface Message {
     cc?: EmailAddress[];
     date: string;
     unseen: boolean;
+    draft?: boolean;
+    /** Special-use flag of the folder the message is stored in, e.g. "\\Drafts" */
+    messageSpecialUse?: string;
     intro?: string;
     text?: MessageText;
     attachments?: Attachment[];
@@ -58,6 +61,24 @@ export interface MessageListResponse {
 }
 
 export type SendRecipient = string | EmailAddress;
+
+/**
+ * Optional payload for `submitDraft()`. Mirrors the SubmitDraft schema of the
+ * EmailEngine API; all fields are optional and most only apply to SMTP deliveries.
+ */
+export interface SubmitDraftOptions {
+    /** SMTP envelope override; derived from the draft's headers when omitted */
+    envelope?: { from?: string; to?: string[] };
+    /** Copy the sent message to the Sent Mail folder (SMTP only; account default when unset) */
+    copy?: boolean | null;
+    /** Upload the sent message to this folder instead of the default Sent Mail folder (SMTP only) */
+    sentMailPath?: string;
+    /** Schedule the send instead of sending immediately */
+    sendAt?: string | Date;
+    deliveryAttempts?: number;
+    gateway?: string;
+    [key: string]: unknown;
+}
 
 /**
  * Custom dialog handler. Invoked by the client as
@@ -113,6 +134,8 @@ export declare class EmailEngineClient {
     deleteMessage(messageId: string): Promise<boolean>;
     moveMessage(messageId: string, targetPath: string): Promise<boolean>;
     sendMessage(to: SendRecipient | SendRecipient[], subject: string, text: string): Promise<any>;
+    saveDraft(to?: SendRecipient | SendRecipient[] | null, subject?: string, text?: string): Promise<any>;
+    submitDraft(messageId: string, options?: SubmitDraftOptions | null): Promise<any>;
     downloadAttachment(attachmentId: string, suggestedFilename?: string): Promise<void>;
     downloadOriginalMessage(messageId: string, subject?: string): Promise<void>;
     formatDate(dateStr: string): string;
