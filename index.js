@@ -2092,6 +2092,17 @@ export class EmailEngineClient {
             const buttonSize = 56; // Button width/height
             const margin = 20; // Desired margin from edges
 
+            // A hidden container (display: none) reports a zero-size rect; positioning
+            // against it would push the fixed-position button off-screen. Hide the button
+            // instead and let the ResizeObserver below restore it once the container is
+            // shown - hosts often create the client inside a container that is only made
+            // visible afterwards.
+            if (!containerRect.width && !containerRect.height) {
+                composeButton.style.display = 'none';
+                return;
+            }
+            composeButton.style.display = '';
+
             // Calculate the ideal position (bottom-right of container with margin)
             const idealBottom = window.innerHeight - containerRect.bottom + margin;
             const idealRight = window.innerWidth - containerRect.right + margin;
@@ -2120,10 +2131,26 @@ export class EmailEngineClient {
         window.addEventListener('scroll', updateWithThrottle);
         window.addEventListener('resize', updateWithThrottle);
 
-        // Store cleanup function for potential future use
+        // Reposition when the container itself changes size or becomes visible - window
+        // scroll/resize events never fire for those. Calls the update directly instead of
+        // the throttled wrapper: the throttle drops trailing calls, which would leave the
+        // button hidden when the observer fires twice in quick succession (initial
+        // notification followed by the container being shown). Observer callbacks are
+        // already batched per frame by the browser, so there is nothing to throttle.
+        let resizeObserver = null;
+        if (typeof ResizeObserver !== 'undefined') {
+            resizeObserver = new ResizeObserver(updateButtonPosition);
+            resizeObserver.observe(this.container);
+        }
+
+        // Cleanup runs from destroy()
         this._composeButtonCleanup = () => {
             window.removeEventListener('scroll', updateWithThrottle);
             window.removeEventListener('resize', updateWithThrottle);
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+                resizeObserver = null;
+            }
         };
     }
 
