@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/postalsys/ee-client/compare/v1.7.1...v1.8.0) (2026-09-02)
+
+
+### Features
+
+* accept a CSP nonce for the injected stylesheet ([72bac22](https://github.com/postalsys/ee-client/commit/72bac226fc723be9f081283b8fcb53ab2e4319ad))
+
 ## [1.7.1](https://github.com/postalsys/ee-client/compare/v1.7.0...v1.7.1) (2026-09-02)
 
 
