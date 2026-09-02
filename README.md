@@ -126,6 +126,7 @@ new EmailEngineClient(options);
 | `alertMethod`        | `function`    | browser `alert()`       | Custom alert dialog, `(message, title, cancelText, okText)` where `cancelText` is `null`.                                                                                         |
 | `darkMode`           | `boolean`     | stored preference       | Initial dark mode. Overrides the preference stored by the builtin toggle.                                                                                                         |
 | `showDarkModeToggle` | `boolean`     | `true`                  | Render the builtin dark mode toggle. Set `false` when the host application drives the mode through `client.setDarkMode(enabled)` (for example in sync with its own theme switch). |
+| `styleNonce`         | `string`      | none                    | Nonce set on the `<style>` element the widget appends. Pass the page's Content-Security-Policy nonce when `style-src-elem` allows no inline stylesheet without one.               |
 
 UI rendering, the compose modal, and dark mode only activate when a `container` is supplied. In a non-browser environment the UI is skipped and the instance behaves as a plain API client.
 

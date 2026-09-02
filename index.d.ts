@@ -105,6 +105,8 @@ export interface EmailEngineClientOptions {
     darkMode?: boolean;
     /** Render the builtin dark mode toggle button (default true); set false when the host drives the mode through setDarkMode() */
     showDarkModeToggle?: boolean;
+    /** CSP nonce set on the <style> element the widget appends, for a host page whose style-src-elem requires one */
+    styleNonce?: string;
 }
 
 export declare class EmailEngineClient {
