@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/postalsys/ee-client/compare/v1.7.0...v1.7.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* report failed API requests in the UI instead of loading forever ([5f65738](https://github.com/postalsys/ee-client/commit/5f65738b1df85e11a24bb0b88a0f54409f9323c1))
+
 ## [1.7.0](https://github.com/postalsys/ee-client/compare/v1.6.0...v1.7.0) (2026-07-30)
 
 
