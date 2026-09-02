@@ -35,18 +35,25 @@ The `files` whitelist in `package.json` (`index.js`, `index.d.ts`, `README.md`,
 
 `EmailEngineClient` has three concerns interleaved in one class:
 
-1. **API client** - `apiRequest(method, endpoint, data)` is the single choke
-   point for every HTTP call. It resolves `fetch` (native in the browser and
-   modern Node; falls back to a dynamic `import('node-fetch')` when the global
-   is absent) and centralizes auth headers and error normalization
-   (`_parseApiError` / `_formatSendError`). The data methods -
-   `loadFolders`, `loadMessages`, `loadMessage`, `markAsRead`, `deleteMessage`,
-   `moveMessage`, `sendMessage`, and attachment/source download - all go through
-   it. Work in API-only mode with no `container`.
+1. **API client** - `apiRequest(method, endpoint, data)` is the choke point for
+   every JSON call and `_fetchBlob(endpoint)` for binary downloads; both go
+   through `_fetch`, which resolves `fetch` (native in the browser and modern
+   Node; falls back to a dynamic `import('node-fetch')` when the global is
+   absent) and tags transport failures with `isNetworkError`. `_responseError`
+   turns a non-ok response into an Error carrying EmailEngine's own Boom payload
+   on `.details`, which `_errorMessage` / `_formatSendError` read back into a
+   human message. The data methods - `loadFolders`, `loadMessages`,
+   `loadMessage`, `markAsRead`, `deleteMessage`, `moveMessage`, `sendMessage`,
+   and attachment/source download - all go through them. Work in API-only mode
+   with no `container`.
 2. **UI rendering** - `createStyles`, `createLayout`, `renderFolderList`,
    `renderMessageList`, `renderMessage`, and the compose modal build the webmail
    interface by assembling HTML strings into `innerHTML`. Only active when a
-   `container` is supplied.
+   `container` is supplied. Panes are written through `_setPaneHtml(selector,
+html)`, which guards the missing-container and post-`destroy()` cases;
+   `_renderPaneError(selector, title, error, retry)` puts a failed request's
+   reason and a Retry button into the affected pane, so no pane is ever left
+   stuck on a "Loading..." placeholder.
 3. **Session keep-alive** - for `sess_` access tokens the client pings the
    account endpoint on an inactivity timer to keep the token alive; `destroy()`
    clears that timer. Always call `destroy()` to avoid a leaked interval.

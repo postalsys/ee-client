@@ -218,6 +218,11 @@ When a `container` is provided the client builds a full webmail interface:
 - Quoted thread history collapsed behind a "Show quoted text" control
 - Compose modal (floating button) for sending plain-text mail, with a Save Draft option that stores the message in the Drafts folder instead of sending it
 - Dark mode toggle with the preference persisted to `localStorage`
+- Failed requests replace the affected pane's placeholder with an error panel and a Retry button
+
+### Failed requests
+
+When a request behind a pane fails, that pane shows why instead of sitting on its "Loading..." placeholder. The reason is the message EmailEngine returned - for example "Requested account is not yet initialized" for an account that has not connected yet, or "Requested mailbox folder was not found" - and a Retry button re-runs the request. If the server could not be reached at all, the panel says so and names the configured `apiUrl`. The underlying promise still rejects, so callers driving the client programmatically can handle the error themselves.
 
 ### Quoted thread history
 
