@@ -164,8 +164,9 @@ at fault.
   renders attacker-controlled email content (subjects, addresses, names,
   filenames, folder names). Every such value must go through `escapeHtml()`.
   The single intentional exception is the message's own HTML body
-  (`msg.text.html`) in `renderMessage()`, which is inserted as-is; do not add
-  new raw-HTML sinks. When editing rendering code, confirm interpolated values
+  (`msg.text.html`), which `_renderMessageBody()` inserts as-is into a shadow
+  root on `.ee-message-body` so host CSS classes and ids cannot reach it; do not
+  add new raw-HTML sinks, and do not move the body back into the light DOM. When editing rendering code, confirm interpolated values
   are escaped.
 - Formatting follows `.prettierrc.json` (4-space indent, single quotes,
   semicolons, 120-column width, no trailing commas, `arrowParens: avoid`, `lf`
