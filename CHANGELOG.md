@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/postalsys/ee-client/compare/v1.8.0...v1.8.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* render the message body in a shadow root and encode ids in API paths ([3abc94d](https://github.com/postalsys/ee-client/commit/3abc94da1264a27d01d9742e2153dff027d6b185))
+
 ## [1.8.0](https://github.com/postalsys/ee-client/compare/v1.7.1...v1.8.0) (2026-09-02)
 
 
