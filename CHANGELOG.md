@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/postalsys/ee-client/compare/v1.8.1...v1.8.2) (2026-10-18)
+
+
+### Bug Fixes
+
+* clip the message body at the shadow host ([8cdc47c](https://github.com/postalsys/ee-client/commit/8cdc47c4ffac9a9c5f65c0b8210ea7831a2ee3d1))
+
 ## [1.8.1](https://github.com/postalsys/ee-client/compare/v1.8.0...v1.8.1) (2026-09-28)
 
 
