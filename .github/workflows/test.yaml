@@ -35,3 +35,9 @@ jobs:
             - run: npm run lint
             - run: npm run format:check
             - run: npm test
+            # Platform guard shared with the other EmailEngine dependencies. This package never
+            # reaches pkg's CommonJS graph: EmailEngine serves index.js as a static ES module, so
+            # the check is that a lone copy of index.js loads as one.
+            - name: Check the static copy EmailEngine serves
+              if: matrix.node-version != '20.x'
+              run: npm run test:cjs
