@@ -77,10 +77,21 @@ app's modal system.
 - **No runtime dependencies.** Keep it that way where practical - this is a
   client library meant to drop into a page or service without pulling a tree.
 
+## Platform constraints
+
+These come from EmailEngine, which ships as a `@yao-pkg/pkg` binary that snapshots a CommonJS module graph and cannot load ES modules. Every package EmailEngine `require()`s must therefore be CommonJS-loadable with `--no-experimental-require-module`. This package is the exception by design, and that is safe only because of how EmailEngine uses it:
+
+- **EmailEngine never `require()`s it.** `copy-static-files.sh` copies `index.js` alone into `static/js/ee-client.js`, and `views/accounts/browse.hbs` loads it in the browser with `import { EmailEngineClient } from '/static/js/ee-client.js'` inside a `<script type="module">`. pkg ships it as a static asset and never executes it under Node, so it stays an ES module (see Code Style Rules) and there is no `require()` test to write.
+- **What that use does require:** `index.js` stays self-contained, with no static `import`/`export ... from` (the copy has no `node_modules` or sibling files beside it), and browser-safe. The only `import()` is the `node-fetch` fallback, reached only in Node when `globalThis.fetch` is missing.
+- **Node.js 20 is the minimum supported version.** Code, tests and tooling must work on Node 20, 22 and 24 (`engines.node` is `>=20.0.0`).
+- **Check:** `npm run test:cjs` runs `test/static-copy.test.js`, which copies `index.js` alone to a temp directory, imports it as an ES module and checks the exports. The script name is shared with the other EmailEngine dependencies, where it runs the suite with require(esm) disabled; here it checks what EmailEngine actually loads. It is also part of `npm test`, and CI runs it as its own step on Node 22 and 24.
+- Do not add runtime dependencies. If a dev dependency's next major is unusable (ESM-only config tooling is fine here, needing more than Node 20 is not), pin the last working major in `.ncurc.cjs` (`reject`, or a `target` of `minor`/`patch`) with a comment giving the reason.
+
 ## Development Commands
 
 ```
 npm test                # node:test smoke tests (node --test test/*.test.js)
+npm run test:cjs        # only the static-copy check (see Platform constraints)
 npm run test:coverage   # the same under c8
 npm run lint            # eslint . (flat config in eslint.config.js)
 npm run lint:fix        # eslint . --fix
@@ -108,9 +119,12 @@ There is no build step - `index.js` ships as-authored.
   exports, the factory guards, request building with `globalThis.fetch` mocked
   through `mock.method`, error shaping, `escapeHtml` and the keep-alive timer.
   The UI rendering half has no automated tests (it needs a DOM).
+  `test/static-copy.test.js` checks the file as EmailEngine serves it (see
+  Platform constraints).
 - Treat green `npm run lint`, `npm run format:check` and `npm test` as the bar
   before committing.
-- CI (`.github/workflows/test.yaml`) runs all three on Node 20, 22 and 24.
+- CI (`.github/workflows/test.yaml`) runs all three on Node 20, 22 and 24,
+  plus `npm run test:cjs` on 22 and 24.
 
 ## Release Process
 
@@ -155,7 +169,7 @@ those must run so the release workflow fires.
 ## CI / GitHub Actions
 
 - `test.yaml` - runs lint, format:check and `npm test` on Node 20, 22 and 24
-  for pushes to `master` and PRs.
+  (plus `npm run test:cjs` on 22 and 24) for pushes to `master` and PRs.
 - `release.yaml` - release-please + npm publish on pushes to `master`.
 
 After pushing, check the runs (`gh run list --branch master`) and report their
