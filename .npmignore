@@ -1,7 +1,7 @@
 # Development files
 eslint.config.js
 .ncurc.cjs
-.prettierrc.json
+.prettierrc
 build.js
 example.html
 

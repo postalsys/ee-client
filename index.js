@@ -79,16 +79,11 @@ export class EmailEngineClient {
             // A containerId that matches nothing is almost always a typo; warn
             // rather than silently degrading to a UI-less, API-only client.
             if (!this.container) {
-                console.warn(
-                    `EmailEngineClient: no element found for containerId "${options.containerId}"; UI rendering disabled`
-                );
+                console.warn(`EmailEngineClient: no element found for containerId "${options.containerId}"; UI rendering disabled`);
             }
         }
-        this.confirmMethod =
-            options.confirmMethod ||
-            ((message, _title = 'Confirm', _cancelText = 'Cancel', _okText = 'OK') => confirm(message));
-        this.alertMethod =
-            options.alertMethod || ((message, _title = 'Notice', _cancelText = null, _okText = 'OK') => alert(message));
+        this.confirmMethod = options.confirmMethod || ((message, _title = 'Confirm', _cancelText = 'Cancel', _okText = 'OK') => confirm(message));
+        this.alertMethod = options.alertMethod || ((message, _title = 'Notice', _cancelText = null, _okText = 'OK') => alert(message));
 
         this.currentFolder = null;
         this.currentMessage = null;
@@ -124,8 +119,7 @@ export class EmailEngineClient {
         this.styleNonce = typeof options.styleNonce === 'string' && options.styleNonce ? options.styleNonce : null;
 
         // Get page size from localStorage or options or default
-        const savedPageSize =
-            typeof window !== 'undefined' && window.localStorage ? localStorage.getItem('ee-client-page-size') : null;
+        const savedPageSize = typeof window !== 'undefined' && window.localStorage ? localStorage.getItem('ee-client-page-size') : null;
         const requestedPageSize = savedPageSize ? parseInt(savedPageSize, 10) : parseInt(options.pageSize, 10);
         this.pageSize = requestedPageSize > 0 ? requestedPageSize : 20;
 
@@ -158,9 +152,7 @@ export class EmailEngineClient {
 
         if (!fetchFn) {
             // Either node-fetch is missing or it exposed no callable default export
-            throw new Error(
-                'fetch is not available. In Node.js environments, please install node-fetch: npm install node-fetch'
-            );
+            throw new Error('fetch is not available. In Node.js environments, please install node-fetch: npm install node-fetch');
         }
 
         try {
@@ -280,9 +272,7 @@ export class EmailEngineClient {
             };
         } catch (error) {
             console.error('Failed to load messages:', error);
-            this._renderPaneError('.ee-message-list', 'Messages unavailable', error, () =>
-                this._fireAndForget(this.loadMessages(path, cursor))
-            );
+            this._renderPaneError('.ee-message-list', 'Messages unavailable', error, () => this._fireAndForget(this.loadMessages(path, cursor)));
             throw error;
         }
     }
@@ -324,9 +314,7 @@ export class EmailEngineClient {
             return this.currentMessage;
         } catch (error) {
             console.error('Failed to load message:', error);
-            this._renderPaneError('.ee-message-viewer', 'Message unavailable', error, () =>
-                this._fireAndForget(this.loadMessage(messageId))
-            );
+            this._renderPaneError('.ee-message-viewer', 'Message unavailable', error, () => this._fireAndForget(this.loadMessage(messageId)));
             throw error;
         }
     }
@@ -408,9 +396,7 @@ export class EmailEngineClient {
     }
 
     _normalizeRecipients(to) {
-        return Array.isArray(to)
-            ? to.map(addr => (typeof addr === 'string' ? { address: addr } : addr))
-            : [typeof to === 'string' ? { address: to } : to];
+        return Array.isArray(to) ? to.map(addr => (typeof addr === 'string' ? { address: addr } : addr)) : [typeof to === 'string' ? { address: to } : to];
     }
 
     // Account details (name, email address) fetched once and cached for the lifetime
@@ -712,12 +698,7 @@ export class EmailEngineClient {
             this._saveBlob(blob, filename);
         } catch (error) {
             console.error('Failed to download attachment:', error);
-            this.alertMethod(
-                this._errorMessage(error, 'Failed to download attachment. Please try again.'),
-                'Download Error',
-                null,
-                'OK'
-            );
+            this.alertMethod(this._errorMessage(error, 'Failed to download attachment. Please try again.'), 'Download Error', null, 'OK');
         }
     }
 
@@ -737,12 +718,7 @@ export class EmailEngineClient {
             this._saveBlob(blob, filename);
         } catch (error) {
             console.error('Failed to download original message:', error);
-            this.alertMethod(
-                this._errorMessage(error, 'Failed to download original message. Please try again.'),
-                'Download Error',
-                null,
-                'OK'
-            );
+            this.alertMethod(this._errorMessage(error, 'Failed to download original message. Please try again.'), 'Download Error', null, 'OK');
         }
     }
 
@@ -1985,9 +1961,7 @@ export class EmailEngineClient {
 
         viewer.querySelector('[data-action="toggle-read"]').addEventListener('click', () => {
             const currentlyUnseen = msg.unseen;
-            this.markAsRead(msg.id, currentlyUnseen).catch(error =>
-                this._alertActionFailed(error, 'Failed to update the message flags')
-            );
+            this.markAsRead(msg.id, currentlyUnseen).catch(error => this._alertActionFailed(error, 'Failed to update the message flags'));
         });
 
         viewer.querySelector('[data-action="delete"]').addEventListener('click', async () => {
@@ -1998,9 +1972,7 @@ export class EmailEngineClient {
                 'Delete'
             );
             if (result) {
-                this.deleteMessage(msg.id).catch(error =>
-                    this._alertActionFailed(error, 'Failed to delete the message')
-                );
+                this.deleteMessage(msg.id).catch(error => this._alertActionFailed(error, 'Failed to delete the message'));
             }
         });
 
@@ -2191,12 +2163,7 @@ export class EmailEngineClient {
 
             if (!to && !subject && !message) {
                 modal.classList.remove('show');
-                await this.alertMethod(
-                    'Nothing to save - fill in at least one field first.',
-                    'Validation Error',
-                    null,
-                    'OK'
-                );
+                await this.alertMethod('Nothing to save - fill in at least one field first.', 'Validation Error', null, 'OK');
                 modal.classList.add('show');
                 setTimeout(() => form.querySelector('input[name="to"]').focus(), 100);
                 return;
@@ -2238,17 +2205,10 @@ export class EmailEngineClient {
             if (!to || !message) {
                 // Close modal temporarily to show alert, then reopen
                 modal.classList.remove('show');
-                await this.alertMethod(
-                    'Please fill in the recipient and message fields.',
-                    'Validation Error',
-                    null,
-                    'OK'
-                );
+                await this.alertMethod('Please fill in the recipient and message fields.', 'Validation Error', null, 'OK');
                 modal.classList.add('show');
                 // Re-focus the appropriate field
-                const fieldToFocus = !to
-                    ? form.querySelector('input[name="to"]')
-                    : form.querySelector('textarea[name="message"]');
+                const fieldToFocus = !to ? form.querySelector('input[name="to"]') : form.querySelector('textarea[name="message"]');
                 setTimeout(() => fieldToFocus.focus(), 100);
                 return;
             }

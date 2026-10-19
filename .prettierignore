@@ -1,4 +1,8 @@
-# Machine-generated files - not hand-formatted, and excluded here so that
-# `prettier --check` (run by prepublishOnly and CI) does not fail on them.
-CHANGELOG.md
+# Generated or machine-maintained files, excluded so that `prettier --check`
+# (run by prepublishOnly and CI) does not fail on them.
+node_modules
+coverage
+dist
 package-lock.json
+CHANGELOG.md
+.release-please-manifest.json

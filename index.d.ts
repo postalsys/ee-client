@@ -85,12 +85,7 @@ export interface SubmitDraftOptions {
  * `(message, title, cancelText, okText)`; `cancelText` is `null` for alerts.
  * May be synchronous or asynchronous. Confirm handlers should resolve to a boolean.
  */
-export type DialogMethod = (
-    message: string,
-    title?: string,
-    cancelText?: string | null,
-    okText?: string
-) => boolean | void | Promise<boolean | void>;
+export type DialogMethod = (message: string, title?: string, cancelText?: string | null, okText?: string) => boolean | void | Promise<boolean | void>;
 
 export interface EmailEngineClientOptions {
     apiUrl?: string;
