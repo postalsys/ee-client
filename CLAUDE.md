@@ -27,6 +27,7 @@ Almost all runtime code lives in a single file:
 - `api.md` - large reference dump of the EmailEngine HTTP API (documentation
   only, not shipped).
 - `README.md`, `LICENSE` - shipped with the package.
+- `test/` - `node:test` smoke tests (not shipped).
 
 The `files` whitelist in `package.json` (`index.js`, `index.d.ts`, `README.md`,
 `LICENSE`) is what actually gets published - `.npmignore` is secondary to it.
@@ -67,7 +68,10 @@ app's modal system.
 - **Module format**: ES modules only (`"type": "module"`, `export class ...`).
   This library is **not** CommonJS - do not convert it, and `require()` will not
   work on it.
-- **Runtime**: browsers and Node.js (`engines.node >= 14`). No framework.
+- **Runtime**: browsers and Node.js (`engines.node >= 20`). No framework. The
+  main consumer is EmailEngine, whose `copy-static-files.sh` copies `index.js`
+  into its admin UI as `static/js/ee-client.js`, so the code must stay
+  browser-safe (ESLint checks `index.js` against browser globals).
 - **HTTP**: the platform `fetch`; `node-fetch` is an **optional** peer dependency
   used only as a Node fallback when `globalThis.fetch` is missing.
 - **No runtime dependencies.** Keep it that way where practical - this is a
@@ -76,12 +80,16 @@ app's modal system.
 ## Development Commands
 
 ```
-npm run lint            # eslint *.js
-npm run format          # prettier --write  (apply formatting)
-npm run format:check    # prettier --check  (verify formatting; runs in CI)
-npm test                # lint + format:check (there is no unit-test suite)
+npm test                # node:test smoke tests (node --test test/*.test.js)
+npm run test:coverage   # the same under c8
+npm run lint            # eslint . (flat config in eslint.config.js)
+npm run lint:fix        # eslint . --fix
+npm run format          # prettier --write .
+npm run format:check    # prettier --check . (runs in CI)
 npm run update          # refresh dependencies with npm-check-updates (ncu)
 ```
+
+Run a single test by name: `node --test --test-name-pattern="escapes HTML" test/smoke.test.js`.
 
 There is no build step - `index.js` ships as-authored.
 
@@ -95,11 +103,14 @@ There is no build step - `index.js` ships as-authored.
 
 ## Testing
 
-- There is **no unit-test suite** in this repository. `npm test` runs `lint` and
-  `format:check` - treat a green `npm test` as the bar before committing.
-- CI (`.github/workflows/test.yaml`) runs `npm test` on Node 22 and 24.
-- If you add real tests, name them so a `test` script can find them and update
-  this section plus the workflow.
+- Tests use Node's built-in `node:test` runner and `node:assert/strict`, in
+  `test/*.test.js`. `test/smoke.test.js` covers only the API-only (no DOM) side:
+  exports, the factory guards, request building with `globalThis.fetch` mocked
+  through `mock.method`, error shaping, `escapeHtml` and the keep-alive timer.
+  The UI rendering half has no automated tests (it needs a DOM).
+- Treat green `npm run lint`, `npm run format:check` and `npm test` as the bar
+  before committing.
+- CI (`.github/workflows/test.yaml`) runs all three on Node 20, 22 and 24.
 
 ## Release Process
 
@@ -143,12 +154,8 @@ those must run so the release workflow fires.
 
 ## CI / GitHub Actions
 
-- `test.yaml` - runs `npm test` (lint + format:check) on Node 22 and 24 for
-  pushes to `master` and PRs.
-- `codeql.yml` - CodeQL security/quality scanning of the JavaScript and the
-  workflows (`example.html` is excluded via `.github/codeql/codeql-config.yml`).
-  Review and resolve CodeQL alerts - this is a browser library that renders
-  untrusted email content, so injection findings matter.
+- `test.yaml` - runs lint, format:check and `npm test` on Node 20, 22 and 24
+  for pushes to `master` and PRs.
 - `release.yaml` - release-please + npm publish on pushes to `master`.
 
 After pushing, check the runs (`gh run list --branch master`) and report their
@@ -168,11 +175,22 @@ at fault.
   root on `.ee-message-body` so host CSS classes and ids cannot reach it; do not
   add new raw-HTML sinks, and do not move the body back into the light DOM. When editing rendering code, confirm interpolated values
   are escaped.
-- Formatting follows `.prettierrc.json` (4-space indent, single quotes,
-  semicolons, 120-column width, no trailing commas, `arrowParens: avoid`, `lf`
-  line endings). Run `npm run format` before committing.
+- Formatting follows `.prettierrc` (4-space indent, single quotes, semicolons,
+  160-column width, no trailing commas, `arrowParens: avoid`, `lf` line
+  endings), the shared Postal Systems config. Run `npm run format` before
+  committing.
+- Linting uses the shared Postal Systems flat config (`eslint.config.js`, ES
+  module form); repo-specific overrides go in its "Repo-specific" block with a
+  one-line reason.
 - Never use emojis in code or documentation; use printable ASCII. Use a single
   hyphen-minus (`-`) as a dash in user-facing strings - no em/en dashes.
-- When composing git commit messages, do not include Claude as a co-author.
-  </content>
-  </invoke>
+- When composing git commit messages, do not include Claude or any AI
+  assistant as a co-author (no `Co-Authored-By` trailer).
+
+## Before committing code changes
+
+1. `npm run format` and `npm run lint`
+2. `npm test`
+3. For non-trivial changes, consider `/simplify` and `/security-review` - this
+   library renders untrusted email content, so rendering code is
+   security-sensitive.
