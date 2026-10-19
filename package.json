@@ -13,12 +13,14 @@
         "LICENSE"
     ],
     "scripts": {
-        "lint": "eslint *.js",
-        "format": "prettier --write *.js *.json *.md",
-        "format:check": "prettier --check *.js *.json *.md",
-        "test": "npm run lint && npm run format:check",
+        "test": "node --test test/*.test.js",
+        "test:coverage": "c8 --reporter=text --reporter=lcov npm test",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
         "update": "rm -rf node_modules package-lock.json && ncu -u && npm install",
-        "prepublishOnly": "npm run lint && npm run format:check"
+        "prepublishOnly": "npm run lint && npm run format:check && npm test"
     },
     "keywords": [
         "email",
@@ -39,11 +41,15 @@
         "url": "https://github.com/postalsys/ee-client/issues"
     },
     "engines": {
-        "node": ">=14.0.0"
+        "node": ">=20.0.0"
     },
     "devDependencies": {
-        "eslint": "^8.57.1",
-        "prettier": "^3.9.9"
+        "@eslint/js": "10.0.1",
+        "c8": "12.0.0",
+        "eslint": "10.13.0",
+        "eslint-config-prettier": "10.1.8",
+        "globals": "17.13.0",
+        "prettier": "3.9.10"
     },
     "peerDependencies": {
         "node-fetch": "^3.0.0"

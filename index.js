@@ -151,7 +151,7 @@ export class EmailEngineClient {
             try {
                 const nodeFetch = await import('node-fetch');
                 fetchFn = nodeFetch.default;
-            } catch (err) {
+            } catch {
                 // node-fetch is not installed; the guard below reports it
             }
         }
@@ -183,7 +183,7 @@ export class EmailEngineClient {
         let details;
         try {
             details = await response.json();
-        } catch (parseError) {
+        } catch {
             // Not a JSON body - the status line is all there is to go on
             details = { message: response.statusText };
         }
@@ -196,7 +196,7 @@ export class EmailEngineClient {
 
     async apiRequest(method, endpoint, data = null) {
         const options = {
-            method: method,
+            method,
             headers: {
                 'Content-Type': 'application/json',
                 ...this._authHeaders()
@@ -253,7 +253,7 @@ export class EmailEngineClient {
         this._setPaneHtml('.ee-message-list', '<div class="ee-loading">Loading messages...</div>');
 
         try {
-            const params = new URLSearchParams({ path: path, pageSize: this.pageSize });
+            const params = new URLSearchParams({ path, pageSize: this.pageSize });
             if (cursor) {
                 params.set('cursor', cursor);
             }
@@ -426,8 +426,8 @@ export class EmailEngineClient {
         try {
             const messageData = {
                 to: this._normalizeRecipients(to),
-                subject: subject,
-                text: text
+                subject,
+                text
             };
 
             const response = await this.apiRequest('POST', `${this._accountPath()}/submit`, messageData);
@@ -451,8 +451,8 @@ export class EmailEngineClient {
             const messageData = {
                 path: draftsFolder.path,
                 flags: ['\\Draft'],
-                subject: subject,
-                text: text
+                subject,
+                text
             };
 
             const recipients = to ? this._normalizeRecipients(to) : [];
@@ -467,7 +467,7 @@ export class EmailEngineClient {
                 if (accountInfo && accountInfo.email) {
                     messageData.from = { name: accountInfo.name || '', address: accountInfo.email };
                 }
-            } catch (err) {
+            } catch {
                 // Non-fatal: the draft is saved without a From header
             }
 
@@ -660,7 +660,7 @@ export class EmailEngineClient {
     _authHeaders() {
         const headers = {};
         if (this.accessToken) {
-            headers['Authorization'] = `Bearer ${this.accessToken}`;
+            headers.Authorization = `Bearer ${this.accessToken}`;
         }
         return headers;
     }
@@ -1844,7 +1844,7 @@ export class EmailEngineClient {
         const pageSizeSelect = messageList.querySelector('[data-action="page-size"]');
         if (pageSizeSelect) {
             pageSizeSelect.addEventListener('change', e => {
-                this.pageSize = parseInt(e.target.value);
+                this.pageSize = parseInt(e.target.value, 10);
                 // Save to localStorage
                 if (typeof window !== 'undefined' && window.localStorage) {
                     localStorage.setItem('ee-client-page-size', this.pageSize.toString());
@@ -2372,6 +2372,7 @@ export class EmailEngineClient {
         let inThrottle;
         return function () {
             const args = arguments;
+            // eslint-disable-next-line no-invalid-this -- the wrapper forwards whatever this its caller bound
             const context = this;
             if (!inThrottle) {
                 func.apply(context, args);
