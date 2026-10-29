@@ -92,6 +92,17 @@ describe('ee-client', () => {
         client.destroy();
     });
 
+    it('titles the message list with the escaped folder name', () => {
+        const client = new EmailEngineClient({ account: 'acc' });
+        client.folders = [{ path: 'X', name: '<img src=x onerror=alert(1)>' }];
+
+        const header = client._messageListHeader('X');
+        assert.ok(header.includes('&lt;img src=x onerror=alert(1)&gt;'));
+        assert.ok(!header.includes('<img'));
+        assert.match(client._messageListHeader('missing'), /<span class="ee-pane-title">Messages<\/span>/);
+        client.destroy();
+    });
+
     it('renders the one-time passcode box, naming the site only when authenticated', () => {
         const client = new EmailEngineClient({ account: 'acc' });
 
