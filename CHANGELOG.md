@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/postalsys/ee-client/compare/v1.9.0...v1.10.0) (2026-10-29)
+
+
+### Features
+
+* responsive layout and icon toolbar for the webmail UI ([8ef47f9](https://github.com/postalsys/ee-client/commit/8ef47f91b2f02447d0a8472840b60d9354e7c917))
+
 ## [1.9.0](https://github.com/postalsys/ee-client/compare/v1.8.2...v1.9.0) (2026-10-29)
 
 
