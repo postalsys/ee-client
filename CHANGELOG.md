@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/postalsys/ee-client/compare/v1.8.2...v1.9.0) (2026-10-29)
+
+
+### Features
+
+* offer a message's one-time passcode in a Code requested box ([22676eb](https://github.com/postalsys/ee-client/commit/22676eb8c4071d33588ba8b88a5acda65252438a))
+
 ## [1.8.2](https://github.com/postalsys/ee-client/compare/v1.8.1...v1.8.2) (2026-10-18)
 
 
