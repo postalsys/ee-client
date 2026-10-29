@@ -92,6 +92,29 @@ describe('ee-client', () => {
         client.destroy();
     });
 
+    it('renders the one-time passcode box, naming the site only when authenticated', () => {
+        const client = new EmailEngineClient({ account: 'acc' });
+
+        assert.equal(client.renderOtpBox(undefined), '');
+        assert.equal(client.renderOtpBox({ code: '', origin: 'https://example.com' }), '');
+
+        const verified = client.renderOtpBox({ code: '600686', origin: 'https://login.example.com', authenticated: true });
+        assert.equal((verified.match(/class="ee-otp-char"/g) || []).length, 6);
+        assert.match(verified, /Code requested for <span class="ee-otp-site">login\.example\.com<\/span>/);
+        assert.doesNotMatch(verified, /could not be verified/);
+
+        const unverified = client.renderOtpBox({ code: '600686', origin: 'https://bank.example', authenticated: false });
+        assert.doesNotMatch(unverified, /bank\.example/);
+        assert.match(unverified, /could not be verified/);
+
+        // a long or punctuated code is one escaped block, not tiles
+        const long = client.renderOtpBox({ code: '<b>"x"</b>-123', origin: 'https://example.com', authenticated: true });
+        assert.doesNotMatch(long, /ee-otp-char/);
+        assert.doesNotMatch(long, /<b>/);
+        assert.match(long, /&lt;b&gt;&quot;x&quot;&lt;\/b&gt;-123/);
+        client.destroy();
+    });
+
     it('starts the keep-alive timer only for sess_ tokens and destroy() clears it', () => {
         const plain = new EmailEngineClient({ account: 'acc', accessToken: 'tok' });
         assert.equal(plain.keepAliveTimer, null);

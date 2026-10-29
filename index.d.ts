@@ -38,6 +38,15 @@ export interface Attachment {
     size?: number;
 }
 
+/** One-time passcode of a message, from its OTP-Token header (EmailEngine 2.87+, experimental) */
+export interface MessageOtp {
+    code: string;
+    /** The origin the passcode is bound to, e.g. "https://example.com" */
+    origin: string;
+    /** Whether the receiving server vouches for the origin. The site is named in the UI only when true */
+    authenticated: boolean;
+}
+
 export interface Message {
     id: string;
     subject?: string;
@@ -52,6 +61,7 @@ export interface Message {
     intro?: string;
     text?: MessageText;
     attachments?: Attachment[];
+    otp?: MessageOtp;
 }
 
 export interface MessageListResponse {
@@ -138,6 +148,10 @@ export declare class EmailEngineClient {
     formatDate(dateStr: string): string;
     formatFileSize(bytes: number): string;
     escapeHtml(value: unknown): string;
+    /** HTML of the "Code requested" box for a message's one-time passcode, empty without one */
+    renderOtpBox(otp?: MessageOtp): string;
+    /** Copies text to the clipboard, falling back to execCommand outside a secure context */
+    copyText(text: string): Promise<boolean>;
     createStyles(): void;
     buildFolderTree(): FolderTreeEntry[];
     renderFolderList(): void;

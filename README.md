@@ -160,6 +160,8 @@ Load a page of messages from a folder. Pass `nextPageCursor` / `prevPageCursor` 
 
 Load a single message. HTML is requested with `webSafeHtml=true`, so EmailEngine returns it pre-processed with inline images embedded for safe display, and the message is marked as seen. Web-safe HTML also folds quoted thread history (reply history, forwarded content, disclaimers) into a `<details class="ee-collapsed-thread">` element - see [Quoted thread history](#quoted-thread-history).
 
+When the message carries a one-time passcode (the `otp` field EmailEngine 2.87+ reads from an `OTP-Token` header), the viewer shows a "Code requested" box above the body with the code and a Copy code button. The site the code is for is named only when EmailEngine reports the origin as `authenticated`, since the header itself proves nothing about the sender.
+
 ### `markAsRead(messageId: string, seen?: boolean): Promise<boolean>`
 
 Add or remove the `\Seen` flag. Pass `false` to mark as unread.
