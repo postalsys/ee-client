@@ -29,6 +29,12 @@ const MESSAGE_BODY_STYLES = `
         height: auto;
     }
 
+    /* A message laid out wider than the viewer (a 600px newsletter on a phone) scrolls
+       sideways inside the clipped host instead of losing its right edge */
+    .ee-message-body-content {
+        overflow-x: auto;
+    }
+
     /* Quoted thread history, folded away by EmailEngine - see _labelCollapsedThreads() */
     .ee-collapsed-thread {
         margin-top: 12px;
@@ -433,26 +439,37 @@ export class EmailEngineClient {
             if (this.container && !this._destroyed) {
                 this.renderMessage();
 
-                // Scroll to top of the email client container
-                this.container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-                // Also scroll the window to ensure visibility
-                if (typeof window !== 'undefined') {
-                    const containerTop = this.container.getBoundingClientRect().top + window.pageYOffset;
-                    window.scrollTo({ top: containerTop, behavior: 'smooth' });
+                // The message opens at the top of the client: bring that into view when the
+                // page is scrolled past it (a long list on a phone), and leave the page alone
+                // otherwise. scrollIntoView honours the host's scroll-margin-top, which is how
+                // a page with a fixed header keeps the toolbar clear of it.
+                if (this.container.getBoundingClientRect().top < 0) {
+                    this.container.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
             }
 
             return this.currentMessage;
         } catch (error) {
             console.error('Failed to load message:', error);
-            this._renderPaneError(
-                '.ee-message-viewer',
-                'Message unavailable',
-                error,
-                () => this._fireAndForget(this.loadMessage(messageId)),
-                this._messageToolbar()
-            );
+            // A message that does not exist (deleted, moved, or a link with a mangled ID) is
+            // not worth retrying, and the API's validation text means nothing to a reader
+            if (error && (error.statusCode === 404 || error.statusCode === 400)) {
+                this._renderPaneError(
+                    '.ee-message-viewer',
+                    'Message not found',
+                    'It may have been moved or deleted, or the link to it is incomplete.',
+                    null,
+                    this._messageToolbar()
+                );
+            } else {
+                this._renderPaneError(
+                    '.ee-message-viewer',
+                    'Message unavailable',
+                    error,
+                    () => this._fireAndForget(this.loadMessage(messageId)),
+                    this._messageToolbar()
+                );
+            }
             throw error;
         }
     }
@@ -504,11 +521,13 @@ export class EmailEngineClient {
 
     async deleteMessage(messageId) {
         try {
-            await this.apiRequest('DELETE', this._messagePath(messageId));
+            const response = await this.apiRequest('DELETE', this._messagePath(messageId));
 
             this._dropMessage(messageId);
 
-            return true;
+            // { deleted, moved: { destination, message } } - moved is set when the message went
+            // to Trash instead of being removed
+            return response || { deleted: true };
         } catch (error) {
             console.error('Failed to delete message:', error);
             throw error;
@@ -779,8 +798,9 @@ export class EmailEngineClient {
     // missing, optionally with a Retry button. Without this a failed request
     // leaves the pane stuck on its "Loading..." placeholder forever, with the
     // only trace of the failure in the developer console.
+    // error is the failed request's error, or a plain explanation to show instead
     _renderPaneError(selector, title, error, retry = null, header = '') {
-        const detail = this._errorMessage(error, '');
+        const detail = typeof error === 'string' ? error : this._errorMessage(error, '');
         const pane = this._setPaneHtml(
             selector,
             `
@@ -815,6 +835,19 @@ export class EmailEngineClient {
     // as an unhandled rejection in hosts with a global error reporter.
     _fireAndForget(promise) {
         promise.catch(() => {});
+    }
+
+    // A short notice at the bottom of the client that goes away on its own, for outcomes that
+    // need no answer (a message queued, a draft saved). Errors keep using alertMethod.
+    notify(message) {
+        const toast = this.container && this.container.querySelector('.ee-toast');
+        if (!toast || this._destroyed) {
+            return;
+        }
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => toast.classList.remove('show'), 4000);
     }
 
     // Message actions (flag, delete, move) have no pane of their own to report into:
@@ -888,6 +921,30 @@ export class EmailEngineClient {
         } else {
             return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
         }
+    }
+
+    // The date in the message header: weekday, date and time to the minute
+    formatFullDate(dateStr) {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+            return '';
+        }
+        return date.toLocaleString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    // Header addresses as escaped HTML: "Name <address>" with the address muted, the bare address
+    // when there is no name, and the name alone for a name-only entry
+    _addressListHtml(list) {
+        return (Array.isArray(list) ? list : list ? [list] : [])
+            .map(entry => (typeof entry === 'string' ? { address: entry } : entry))
+            .filter(entry => entry && (entry.name || entry.address))
+            .map(entry => {
+                if (entry.name && entry.address) {
+                    return `${this.escapeHtml(entry.name)} <span class="ee-address">&lt;${this.escapeHtml(entry.address)}&gt;</span>`;
+                }
+                return this.escapeHtml(entry.name || entry.address);
+            })
+            .join(', ');
     }
 
     formatFileSize(bytes) {
@@ -1082,6 +1139,18 @@ export class EmailEngineClient {
         }
 
         const style = this._createStyle(`
+            /* The accent comes from the host's --ee-accent, --ee-accent-hover and --ee-accent-light
+               (set on the container). They are resolved into private names once per root
+               element: setting --ee-accent itself here would hide the host's value. */
+            .ee-client,
+            .ee-compose-button,
+            .ee-compose-modal,
+            .ee-toast {
+                --_accent: var(--ee-accent, #007bff);
+                --_accent-hover: var(--ee-accent-hover, #0056b3);
+                --_accent-light: var(--ee-accent-light, #66b2ff);
+            }
+
             .ee-client {
                 --ee-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
                 display: flex;
@@ -1129,7 +1198,7 @@ export class EmailEngineClient {
             }
             
             .ee-folder-item.active {
-                background: #007bff;
+                background: var(--_accent);
                 color: white;
             }
             
@@ -1140,7 +1209,7 @@ export class EmailEngineClient {
                 top: 0;
                 bottom: 0;
                 width: 3px;
-                background: #0056b3;
+                background: var(--_accent-hover);
             }
             
             .ee-folder-content {
@@ -1204,7 +1273,7 @@ export class EmailEngineClient {
             }
             
             .ee-message-item.active {
-                background: #e3f2fd;
+                background: color-mix(in srgb, var(--_accent) 12%, white);
             }
             
             .ee-message-item.unread {
@@ -1346,7 +1415,7 @@ export class EmailEngineClient {
             .ee-button:focus-visible,
             .ee-move-button:focus-within,
             .ee-compose-button:focus-visible {
-                outline: 2px solid #4d9fff;
+                outline: 2px solid var(--_accent);
                 outline-offset: 1px;
             }
 
@@ -1376,13 +1445,13 @@ export class EmailEngineClient {
             }
 
             .ee-button-primary {
-                background: #007bff;
-                border-color: #007bff;
+                background: var(--_accent);
+                border-color: var(--_accent);
                 color: white;
             }
 
             .ee-button-primary:hover:not(:disabled) {
-                background: #0069d9;
+                background: var(--_accent-hover);
             }
 
             .ee-button-danger:hover:not(:disabled) {
@@ -1416,9 +1485,7 @@ export class EmailEngineClient {
             
             .ee-message-content {
                 flex: 1;
-                /* The bottom padding lets the end of the message scroll clear of
-                   the floating compose button */
-                padding: 20px 20px 88px;
+                padding: 20px;
                 overflow-y: auto;
             }
 
@@ -1450,7 +1517,7 @@ export class EmailEngineClient {
             .ee-otp {
                 margin-bottom: 16px;
                 padding: 14px 16px;
-                background: #eef3fb;
+                background: color-mix(in srgb, var(--_accent) 7%, white);
                 border-radius: 8px;
             }
 
@@ -1503,14 +1570,14 @@ export class EmailEngineClient {
                 height: 32px;
                 padding: 0 16px;
                 font-size: 13px;
-                background: #007bff;
-                border-color: #007bff;
+                background: var(--_accent);
+                border-color: var(--_accent);
                 color: white;
                 border-radius: 16px;
             }
 
             .ee-otp .ee-otp-copy:hover:not(:disabled) {
-                background: #0069d9;
+                background: var(--_accent-hover);
             }
 
             .ee-otp-status,
@@ -1695,7 +1762,6 @@ export class EmailEngineClient {
             .ee-message-items {
                 flex: 1;
                 overflow-y: auto;
-                padding-bottom: 88px;
             }
             
             .ee-compose-button {
@@ -1704,48 +1770,34 @@ export class EmailEngineClient {
                 right: 20px;
                 display: inline-flex;
                 align-items: center;
-                gap: 10px;
-                height: 52px;
-                padding: 0 22px 0 18px;
-                background: #007bff;
+                justify-content: center;
+                width: 56px;
+                height: 56px;
+                padding: 0;
+                background: var(--_accent);
                 border: none;
-                border-radius: 16px;
+                border-radius: 50%;
                 color: white;
-                font-family: var(--ee-font, inherit);
-                font-size: 15px;
-                font-weight: 600;
                 cursor: pointer;
-                box-shadow: 0 4px 12px rgba(0,123,255,0.3);
+                box-shadow: 0 4px 12px color-mix(in srgb, var(--_accent) 30%, transparent);
                 z-index: 1000;
                 transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
             }
             
             .ee-compose-button:hover {
-                background: #0056b3;
+                background: var(--_accent-hover);
                 transform: translateY(-1px);
-                box-shadow: 0 6px 16px rgba(0,123,255,0.4);
-            }
-
-            .ee-compose-button.ee-compose-compact {
-                width: 56px;
-                height: 56px;
-                padding: 0;
-                justify-content: center;
-                border-radius: 50%;
-            }
-
-            .ee-compose-compact .ee-compose-button-label {
-                display: none;
+                box-shadow: 0 6px 16px color-mix(in srgb, var(--_accent) 40%, transparent);
             }
 
             /* Medium widths: the viewer is too narrow for labelled buttons, so the
                toolbar goes icon-only, as webmail toolbars usually are */
-            @container ee-viewer (max-width: 559px) {
-                .ee-message-actions .ee-button:not(.ee-keep-label) .ee-button-label {
+            @container ee-viewer (max-width: 699px) {
+                .ee-message-actions .ee-button:not(.ee-keep-label):not(.ee-label-priority) .ee-button-label {
                     display: none;
                 }
 
-                .ee-message-actions .ee-button:not(.ee-keep-label) {
+                .ee-message-actions .ee-button:not(.ee-keep-label):not(.ee-label-priority) {
                     width: 30px;
                     padding: 0;
                 }
@@ -1753,6 +1805,22 @@ export class EmailEngineClient {
                 .ee-message-actions .ee-move-button {
                     width: 44px;
                     gap: 2px;
+                }
+            }
+
+            /* Below this even the reply group goes icon-only */
+            @container ee-viewer (max-width: 439px) {
+                .ee-message-actions .ee-label-priority .ee-button-label {
+                    display: none;
+                }
+
+                .ee-message-actions .ee-label-priority {
+                    width: 30px;
+                    padding: 0;
+                }
+
+                .ee-toolbar-divider {
+                    display: none;
                 }
             }
 
@@ -1781,6 +1849,15 @@ export class EmailEngineClient {
 
                 .ee-message-content {
                     padding: 16px 16px 88px;
+                }
+
+                .ee-message-items {
+                    padding-bottom: 88px;
+                }
+
+                /* the floating button is the Compose button here */
+                .ee-sidebar-compose {
+                    display: none;
                 }
             }
             
@@ -1846,37 +1923,56 @@ export class EmailEngineClient {
             }
             
             .ee-compose-form {
-                padding: 20px;
+                padding: 16px 20px;
                 display: flex;
                 flex-direction: column;
-                gap: 16px;
+                gap: 10px;
                 flex: 1;
                 overflow-y: auto;
             }
-            
-            .ee-compose-field {
+
+            /* One line per header field: the label beside its input, as mail clients lay out
+               their compose headers, so the text box and the quote get the height */
+            .ee-compose-row {
                 display: flex;
-                flex-direction: column;
-                gap: 4px;
+                align-items: center;
+                gap: 10px;
             }
-            
+
             .ee-compose-label {
+                flex: 0 0 56px;
+                font-size: 13px;
                 font-weight: 500;
-                color: #333;
+                color: #555;
             }
-            
+
             .ee-compose-input {
+                flex: 1;
+                min-width: 0;
                 padding: 8px 12px;
                 border: 1px solid #ddd;
                 border-radius: 4px;
                 font-size: 14px;
                 font-family: inherit;
             }
-            
-            .ee-compose-input:focus {
-                outline: none;
-                border-color: #007bff;
-                box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+
+            .ee-compose-input[aria-invalid="true"],
+            .ee-compose-textarea[aria-invalid="true"] {
+                border-color: #dc3545;
+            }
+
+            /* Why the form did not go out, between the form and its buttons so it is on
+               screen however far the form is scrolled */
+            .ee-compose-error {
+                margin: 0 20px 4px;
+                padding: 8px 12px;
+                border: 1px solid #fcc;
+                border-radius: 4px;
+                background: #fee;
+                color: #c00;
+                font-size: 13px;
+                white-space: pre-line;
+                flex-shrink: 0;
             }
             
             .ee-compose-textarea {
@@ -1886,13 +1982,14 @@ export class EmailEngineClient {
                 font-size: 14px;
                 font-family: inherit;
                 resize: vertical;
-                min-height: 160px;
+                min-height: 180px;
             }
-            
+
+            .ee-compose-input:focus,
             .ee-compose-textarea:focus {
                 outline: none;
-                border-color: #007bff;
-                box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+                border-color: var(--_accent);
+                box-shadow: 0 0 0 2px color-mix(in srgb, var(--_accent) 12%, transparent);
             }
             
             .ee-compose-actions {
@@ -1905,7 +2002,7 @@ export class EmailEngineClient {
             }
             
             .ee-compose-send {
-                background: #007bff;
+                background: var(--_accent);
                 color: white;
                 border: none;
                 padding: 10px 20px;
@@ -1916,7 +2013,7 @@ export class EmailEngineClient {
             }
             
             .ee-compose-send:hover:not(:disabled) {
-                background: #0056b3;
+                background: var(--_accent-hover);
             }
             
             .ee-compose-send:disabled {
@@ -1925,24 +2022,26 @@ export class EmailEngineClient {
                 opacity: 0.6;
             }
             
+            /* Cancel is the quiet way out, not a third weighted button */
             .ee-compose-cancel {
-                background: #6c757d;
-                color: white;
+                margin-right: auto;
+                background: transparent;
+                color: #555;
                 border: none;
-                padding: 10px 20px;
+                padding: 10px 12px;
                 border-radius: 4px;
                 font-size: 14px;
                 cursor: pointer;
             }
 
             .ee-compose-cancel:hover {
-                background: #545b62;
+                background: #f0f0f0;
             }
 
             .ee-compose-save-draft {
                 background: transparent;
-                color: #007bff;
-                border: 1px solid #007bff;
+                color: var(--_accent);
+                border: 1px solid var(--_accent);
                 padding: 10px 20px;
                 border-radius: 4px;
                 font-size: 14px;
@@ -1951,7 +2050,7 @@ export class EmailEngineClient {
             }
 
             .ee-compose-save-draft:hover:not(:disabled) {
-                background: #007bff;
+                background: var(--_accent);
                 color: white;
             }
 
@@ -1962,25 +2061,97 @@ export class EmailEngineClient {
                 opacity: 0.6;
             }
 
+            .ee-sidebar-compose {
+                padding: 12px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+
+            .ee-sidebar-compose-button {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                width: 100%;
+                height: 38px;
+                border: none;
+                border-radius: 6px;
+                background: var(--_accent);
+                color: white;
+                font: inherit;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+            }
+
+            .ee-sidebar-compose-button:hover {
+                background: var(--_accent-hover);
+            }
+
+            .ee-toolbar-divider {
+                width: 1px;
+                height: 20px;
+                margin: 0 4px;
+                background: #ddd;
+                flex-shrink: 0;
+            }
+
+            .ee-address {
+                color: #666;
+            }
+
+            /* A styled message on the light surface its colours were chosen for (see
+               _renderMessageBody); plain messages follow the theme */
+            .ee-dark-mode .ee-message-body[data-styled],
+            .ee-dark-mode .ee-compose-quote-body[data-styled] {
+                background: #ffffff;
+                color: #222;
+                padding: 12px;
+                border-radius: 6px;
+            }
+
+            .ee-toast {
+                position: fixed;
+                left: 50%;
+                bottom: 24px;
+                transform: translate(-50%, 16px);
+                max-width: calc(100vw - 32px);
+                padding: 10px 16px;
+                border-radius: 6px;
+                background: #323232;
+                color: #fff;
+                font-family: var(--ee-font, inherit);
+                font-size: 14px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.2s ease, transform 0.2s ease;
+                z-index: 2100;
+            }
+
+            .ee-toast.show {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+
+            .ee-toast.ee-dark-mode {
+                background: #e0e0e0;
+                color: #1a1a1a;
+            }
+
             /* Parts of the compose form that come and go (Cc/Bcc, the forward checkbox, the
                quote) use the hidden attribute, which a display rule would otherwise override */
             .ee-compose-modal [hidden] {
                 display: none !important;
             }
 
-            .ee-compose-label-row {
-                display: flex;
-                justify-content: space-between;
-                align-items: baseline;
-            }
-
             .ee-compose-link {
+                flex-shrink: 0;
                 background: none;
                 border: none;
-                padding: 0;
+                padding: 4px 0;
                 font: inherit;
                 font-size: 13px;
-                color: #007bff;
+                color: var(--_accent);
                 cursor: pointer;
             }
 
@@ -2157,7 +2328,7 @@ export class EmailEngineClient {
             }
 
             .ee-dark-mode .ee-folder-item.active {
-                background: #0056b3;
+                background: var(--_accent-hover);
             }
 
             .ee-dark-mode .ee-message-list {
@@ -2174,7 +2345,7 @@ export class EmailEngineClient {
             }
 
             .ee-dark-mode .ee-message-item.active {
-                background: #1a3d5c;
+                background: color-mix(in srgb, var(--_accent) 35%, #1a1a1a);
             }
 
             .ee-dark-mode .ee-message-date,
@@ -2227,9 +2398,10 @@ export class EmailEngineClient {
             }
 
             .ee-dark-mode .ee-button-primary,
-            .ee-dark-mode .ee-button-primary:hover:not(:disabled) {
-                background: #0056b3;
-                border-color: #0056b3;
+            .ee-dark-mode .ee-button-primary:hover:not(:disabled),
+            .ee-dark-mode .ee-sidebar-compose-button {
+                background: var(--_accent-hover);
+                border-color: var(--_accent-hover);
                 color: white;
             }
 
@@ -2297,7 +2469,7 @@ export class EmailEngineClient {
             }
 
             .ee-dark-mode .ee-otp {
-                background: #23303f;
+                background: color-mix(in srgb, var(--_accent) 18%, #1a1a1a);
             }
 
             .ee-dark-mode .ee-otp-title {
@@ -2311,8 +2483,8 @@ export class EmailEngineClient {
             }
 
             .ee-dark-mode .ee-otp .ee-otp-copy {
-                background: #0056b3;
-                border-color: #0056b3;
+                background: var(--_accent-hover);
+                border-color: var(--_accent-hover);
                 color: white;
             }
 
@@ -2329,12 +2501,8 @@ export class EmailEngineClient {
             /* The compose button and modal sit beside .ee-client, not inside it, so
                setDarkMode puts the ee-dark-mode class on them directly */
             .ee-compose-button.ee-dark-mode {
-                background: #0056b3;
+                background: var(--_accent-hover);
                 color: white;
-            }
-
-            .ee-compose-button.ee-dark-mode:hover {
-                background: #004a99;
             }
 
             .ee-compose-modal.ee-dark-mode {
@@ -2344,10 +2512,6 @@ export class EmailEngineClient {
             .ee-dark-mode .ee-compose-dialog {
                 background: #202020;
                 color: #e0e0e0;
-            }
-
-            .ee-dark-mode .ee-compose-label {
-                color: #ccc;
             }
 
             .ee-dark-mode .ee-compose-header {
@@ -2372,8 +2536,8 @@ export class EmailEngineClient {
 
             .ee-dark-mode .ee-compose-input:focus,
             .ee-dark-mode .ee-compose-textarea:focus {
-                border-color: #0056b3;
-                box-shadow: 0 0 0 2px rgba(0,86,179,0.2);
+                border-color: var(--_accent-hover);
+                box-shadow: 0 0 0 2px color-mix(in srgb, var(--_accent) 25%, transparent);
             }
 
             .ee-dark-mode .ee-compose-actions {
@@ -2381,25 +2545,44 @@ export class EmailEngineClient {
             }
 
             .ee-dark-mode .ee-compose-cancel {
-                background: #444;
+                color: #ccc;
             }
 
             .ee-dark-mode .ee-compose-cancel:hover {
-                background: #555;
+                background: #333;
             }
 
             .ee-dark-mode .ee-compose-save-draft {
-                color: #66b2ff;
-                border-color: #66b2ff;
+                color: var(--_accent-light);
+                border-color: var(--_accent-light);
             }
 
             .ee-dark-mode .ee-compose-save-draft:hover:not(:disabled) {
-                background: #66b2ff;
+                background: var(--_accent-light);
                 color: #1a1a1a;
             }
 
+            .ee-dark-mode .ee-sidebar-compose {
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-toolbar-divider {
+                background: #444;
+            }
+
+            .ee-dark-mode .ee-address,
+            .ee-dark-mode .ee-compose-label {
+                color: #aaa;
+            }
+
+            .ee-dark-mode .ee-compose-error {
+                background: #3a2222;
+                border-color: #5c3030;
+                color: #f0a5a5;
+            }
+
             .ee-dark-mode .ee-compose-link {
-                color: #66b2ff;
+                color: var(--_accent-light);
             }
 
             .ee-dark-mode .ee-compose-attach {
@@ -2687,9 +2870,10 @@ export class EmailEngineClient {
         // the toolbar while keeping the platform's own folder picker.
         const respond = isDraft
             ? ''
-            : `${this._toolbarButton('reply', 'reply', 'Reply', 'Reply to the sender')}
-                ${addressEntries(msg.to).length + addressEntries(msg.cc).length > 1 ? this._toolbarButton('reply-all', 'replyAll', 'Reply all', 'Reply to everyone') : ''}
-                ${this._toolbarButton('forward', 'forward', 'Forward', 'Forward this message')}`;
+            : `${this._toolbarButton('reply', 'reply', 'Reply', 'Reply to the sender', 'ee-label-priority')}
+                ${addressEntries(msg.to).length + addressEntries(msg.cc).length > 1 ? this._toolbarButton('reply-all', 'replyAll', 'Reply all', 'Reply to everyone', 'ee-label-priority') : ''}
+                ${this._toolbarButton('forward', 'forward', 'Forward', 'Forward this message', 'ee-label-priority')}
+                <span class="ee-toolbar-divider"></span>`;
         const actions = `
                 ${isDraft ? this._toolbarButton('send-draft', 'send', 'Send draft', 'Send this draft now', 'ee-button-primary ee-keep-label') : respond}
                 ${this._toolbarButton('toggle-read', isUnseen ? 'mailOpen' : 'mail', isUnseen ? 'Mark read' : 'Mark unread', isUnseen ? 'Mark as read' : 'Mark as unread')}
@@ -2718,25 +2902,25 @@ export class EmailEngineClient {
                 <div class="ee-message-meta">
                     <div class="ee-message-meta-row">
                         <span class="ee-message-meta-label">From</span>
-                        <span class="ee-message-meta-value">${msg.from ? `${this.escapeHtml(msg.from.name || '')} &lt;${this.escapeHtml(msg.from.address)}&gt;` : 'Unknown'}</span>
+                        <span class="ee-message-meta-value">${this._addressListHtml(msg.from) || 'Unknown'}</span>
                     </div>
                     <div class="ee-message-meta-row">
                         <span class="ee-message-meta-label">To</span>
-                        <span class="ee-message-meta-value">${msg.to ? msg.to.map(t => `${this.escapeHtml(t.name || '')} &lt;${this.escapeHtml(t.address)}&gt;`).join(', ') : ''}</span>
+                        <span class="ee-message-meta-value">${this._addressListHtml(msg.to)}</span>
                     </div>
                     ${
                         msg.cc && msg.cc.length
                             ? `
                         <div class="ee-message-meta-row">
                             <span class="ee-message-meta-label">Cc</span>
-                            <span class="ee-message-meta-value">${msg.cc.map(c => `${this.escapeHtml(c.name || '')} &lt;${this.escapeHtml(c.address)}&gt;`).join(', ')}</span>
+                            <span class="ee-message-meta-value">${this._addressListHtml(msg.cc)}</span>
                         </div>
                     `
                             : ''
                     }
                     <div class="ee-message-meta-row">
                         <span class="ee-message-meta-label">Date</span>
-                        <span class="ee-message-meta-value">${this.escapeHtml(new Date(msg.date).toLocaleString())}</span>
+                        <span class="ee-message-meta-value">${this.escapeHtml(this.formatFullDate(msg.date))}</span>
                     </div>
                 </div>
                 ${this.renderOtpBox(msg.otp)}
@@ -2791,7 +2975,7 @@ export class EmailEngineClient {
 
                 try {
                     await this.submitDraft(msg.id);
-                    await this.alertMethod('Draft queued for delivery.', 'Success', null, 'OK');
+                    this.notify('Draft queued for delivery.');
                     // Refresh the folder view - the provider removes the draft once it is sent,
                     // immediately for Gmail and MS Graph, after SMTP delivery for IMAP accounts.
                     if (!this._destroyed && this.currentFolder) {
@@ -2819,14 +3003,14 @@ export class EmailEngineClient {
         });
 
         viewer.querySelector('[data-action="delete"]').addEventListener('click', async () => {
-            const result = await this.confirmMethod(
-                'Are you sure you want to delete this message? This action cannot be undone.',
-                'Delete Message',
-                'Cancel',
-                'Delete'
-            );
+            // Whether a delete moves the message to Trash or removes it depends on the backend
+            // and the folder (IMAP removes it from Trash and Junk, Gmail always moves it), so the
+            // question makes no promise and the notice reports what the server did
+            const result = await this.confirmMethod('Delete this message?', 'Delete Message', 'Cancel', 'Delete');
             if (result) {
-                this.deleteMessage(msg.id).catch(error => this._alertActionFailed(error, 'Failed to delete the message'));
+                this.deleteMessage(msg.id)
+                    .then(response => this.notify(response && response.moved ? 'Message moved to Trash.' : 'Message deleted.'))
+                    .catch(error => this._alertActionFailed(error, 'Failed to delete the message'));
             }
         });
 
@@ -2925,6 +3109,16 @@ export class EmailEngineClient {
         }
 
         root.replaceChildren(style, content);
+        // A message that sets its own colours or backgrounds was designed for a light page;
+        // in dark mode its dark text would land on a dark background, or the client's light
+        // text on its white tables, so it is shown on a light surface instead (see the
+        // [data-styled] rule). A plain message has none and follows the theme.
+        const styled = Array.from(content.querySelectorAll('[style], [bgcolor], [color]')).some(
+            el => el.hasAttribute('bgcolor') || el.hasAttribute('color') || el.style.color || el.style.backgroundColor || el.style.backgroundImage
+        );
+        if (styled) {
+            host.dataset.styled = 'true';
+        }
         return root;
     }
 
@@ -2965,42 +3159,41 @@ export class EmailEngineClient {
                                 : ''
                         }
                     </div>
+                    <div class="ee-sidebar-compose">
+                        <button type="button" class="ee-sidebar-compose-button" data-action="compose">${icon('compose', 16)}<span>Compose</span></button>
+                    </div>
                     <div class="ee-folder-tree"></div>
                 </div>
                 <div class="ee-message-list">${this._messageListPlaceholder()}</div>
                 <div class="ee-message-viewer">${this._messageViewerPlaceholder()}</div>
             </div>
-            <button type="button" class="ee-compose-button${this.darkMode ? ' ee-dark-mode' : ''}" title="Compose email" aria-label="Compose">${icon('compose', 22)}<span class="ee-compose-button-label">Compose</span></button>
+            <button type="button" class="ee-compose-button${this.darkMode ? ' ee-dark-mode' : ''}" title="Compose email" aria-label="Compose">${icon('compose', 22)}</button>
+            <div class="ee-toast${this.darkMode ? ' ee-dark-mode' : ''}" role="status" aria-live="polite"></div>
             <div class="ee-compose-modal${this.darkMode ? ' ee-dark-mode' : ''}">
                 <div class="ee-compose-dialog" role="dialog" aria-modal="true" aria-label="Compose">
                     <div class="ee-compose-header">
                         <h3 class="ee-compose-title">${COMPOSE_TITLES.new}</h3>
                         <button type="button" class="ee-compose-close" aria-label="Close" title="Close">${icon('close', 18)}</button>
                     </div>
-                    <form class="ee-compose-form">
-                        <div class="ee-compose-field">
-                            <div class="ee-compose-label-row">
-                                <label class="ee-compose-label" for="${this._composeId('to')}">To:</label>
-                                <button type="button" class="ee-compose-link" data-action="show-cc">Cc / Bcc</button>
-                            </div>
-                            <input type="text" class="ee-compose-input" id="${this._composeId('to')}" name="to" placeholder="recipient@example.com" autocomplete="off" spellcheck="false">
+                    <form class="ee-compose-form" novalidate>
+                        <div class="ee-compose-row">
+                            <label class="ee-compose-label" for="${this._composeId('to')}">To</label>
+                            <input type="text" class="ee-compose-input" id="${this._composeId('to')}" name="to" autocomplete="off" spellcheck="false">
+                            <button type="button" class="ee-compose-link" data-action="show-cc">Cc / Bcc</button>
                         </div>
-                        <div class="ee-compose-field" data-field="cc" hidden>
-                            <label class="ee-compose-label" for="${this._composeId('cc')}">Cc:</label>
+                        <div class="ee-compose-row" data-field="cc" hidden>
+                            <label class="ee-compose-label" for="${this._composeId('cc')}">Cc</label>
                             <input type="text" class="ee-compose-input" id="${this._composeId('cc')}" name="cc" autocomplete="off" spellcheck="false">
                         </div>
-                        <div class="ee-compose-field" data-field="bcc" hidden>
-                            <label class="ee-compose-label" for="${this._composeId('bcc')}">Bcc:</label>
+                        <div class="ee-compose-row" data-field="bcc" hidden>
+                            <label class="ee-compose-label" for="${this._composeId('bcc')}">Bcc</label>
                             <input type="text" class="ee-compose-input" id="${this._composeId('bcc')}" name="bcc" autocomplete="off" spellcheck="false">
                         </div>
-                        <div class="ee-compose-field">
-                            <label class="ee-compose-label" for="${this._composeId('subject')}">Subject:</label>
-                            <input type="text" class="ee-compose-input" id="${this._composeId('subject')}" name="subject" placeholder="Enter subject">
+                        <div class="ee-compose-row">
+                            <label class="ee-compose-label" for="${this._composeId('subject')}">Subject</label>
+                            <input type="text" class="ee-compose-input" id="${this._composeId('subject')}" name="subject">
                         </div>
-                        <div class="ee-compose-field">
-                            <label class="ee-compose-label" for="${this._composeId('message')}">Message:</label>
-                            <textarea class="ee-compose-textarea" id="${this._composeId('message')}" name="message" placeholder="Type your message here..."></textarea>
-                        </div>
+                        <textarea class="ee-compose-textarea" name="message" aria-label="Message" placeholder="Write your message"></textarea>
                         <div class="ee-compose-files">
                             <div class="ee-compose-chips"></div>
                             <div class="ee-compose-files-row">
@@ -3017,6 +3210,7 @@ export class EmailEngineClient {
                             <div class="ee-compose-quote-frame"></div>
                         </div>
                     </form>
+                    <div class="ee-compose-error" role="alert" hidden></div>
                     <div class="ee-compose-actions">
                         <button type="button" class="ee-compose-cancel">Cancel</button>
                         <button type="button" class="ee-compose-save-draft">Save Draft</button>
@@ -3134,6 +3328,7 @@ export class EmailEngineClient {
             mode === 'forward' ? 'The forwarded message is added below your text:' : `${sender}'s message is quoted below your reply:`;
         // A shadow root cannot be attached twice, so each quote gets a fresh host
         const host = document.createElement('div');
+        host.className = 'ee-compose-quote-body';
         quote.querySelector('.ee-compose-quote-frame').replaceChildren(host);
         this._labelCollapsedThreads(this._renderMessageBody(host, original));
         quote.hidden = false;
@@ -3163,6 +3358,7 @@ export class EmailEngineClient {
         els.forwardAttachments.hidden = true;
         els.quote.hidden = true;
         els.quote.querySelector('.ee-compose-quote-frame').replaceChildren();
+        this._clearComposeError();
         this._compose = { els, reference: null, files: [] };
         this._showCopyFields({ cc: false, bcc: false });
     }
@@ -3174,20 +3370,24 @@ export class EmailEngineClient {
         }
     }
 
-    // An alert shown from inside the compose form: the modal steps aside so the host's dialog is
-    // not stacked under it, and comes back with the form as it was
-    async _composeAlert(message, title, focusField = null) {
-        const { modal, form } = this._compose.els;
-        modal.classList.remove('show');
-        await this.alertMethod(message, title, null, 'OK');
-        if (this._destroyed) {
-            return;
+    // Shows why the form cannot go out, inside the form itself, and marks the field it is about.
+    // The message stays until the form is changed or closed.
+    _showComposeError(message, field = null) {
+        const { form, error } = this._compose.els;
+        this._clearComposeError();
+        error.textContent = message;
+        error.hidden = false;
+        const input = field ? form.elements[field] : null;
+        if (input) {
+            input.setAttribute('aria-invalid', 'true');
+            input.focus();
         }
-        modal.classList.add('show');
-        const field = focusField ? form.elements[focusField] : null;
-        if (field) {
-            setTimeout(() => field.focus(), 100);
-        }
+    }
+
+    _clearComposeError() {
+        const { form, error } = this._compose.els;
+        error.hidden = true;
+        form.querySelectorAll('[aria-invalid]').forEach(input => input.removeAttribute('aria-invalid'));
     }
 
     _renderComposeChips() {
@@ -3218,7 +3418,7 @@ export class EmailEngineClient {
 
     // Takes picked files into the form within the size limit. They are kept as File objects and
     // read only when the message is sent, so a removed file is never read at all.
-    async _addComposeFiles(files) {
+    _addComposeFiles(files) {
         let total = this._compose.files.reduce((sum, file) => sum + file.size, 0);
         const skipped = [];
         for (const file of files) {
@@ -3231,10 +3431,7 @@ export class EmailEngineClient {
         }
         this._renderComposeChips();
         if (skipped.length) {
-            await this._composeAlert(
-                `Attachments are limited to ${this.formatFileSize(this.maxAttachmentSize)} in total. Not attached: ${skipped.join(', ')}`,
-                'Attachment Too Large'
-            );
+            this._showComposeError(`Attachments are limited to ${this.formatFileSize(this.maxAttachmentSize)} in total. Not attached: ${skipped.join(', ')}`);
         }
     }
 
@@ -3294,9 +3491,10 @@ export class EmailEngineClient {
     async _runComposeAction(button, busyText, errorTitle, requireMessage, submit) {
         const draft = this._readComposeForm(requireMessage);
         if (draft.problem) {
-            await this._composeAlert(draft.problem.message, 'Validation Error', draft.problem.field);
+            this._showComposeError(draft.problem.message, draft.problem.field);
             return null;
         }
+        this._clearComposeError();
 
         const originalText = button.textContent;
         button.disabled = true;
@@ -3308,7 +3506,7 @@ export class EmailEngineClient {
             return result || {};
         } catch (error) {
             console.error(`${errorTitle}:`, error);
-            await this._composeAlert(this._formatSendError(error), errorTitle, 'to');
+            this._showComposeError(`${errorTitle}: ${this._formatSendError(error)}`);
             return null;
         } finally {
             button.disabled = false;
@@ -3329,12 +3527,15 @@ export class EmailEngineClient {
             chips: modal.querySelector('.ee-compose-chips'),
             fileInput: modal.querySelector('.ee-compose-file-input'),
             forwardAttachments: modal.querySelector('.ee-compose-forward-attachments'),
-            quote: modal.querySelector('.ee-compose-quote')
+            quote: modal.querySelector('.ee-compose-quote'),
+            error: modal.querySelector('.ee-compose-error')
         };
         const { form, fileInput, chips } = els;
         this._compose = { els, reference: null, files: [] };
 
-        this.container.querySelector('.ee-compose-button').addEventListener('click', () => this.compose());
+        this.container
+            .querySelectorAll('.ee-compose-button, .ee-sidebar-compose-button')
+            .forEach(button => button.addEventListener('click', () => this.compose()));
 
         const closeCompose = () => this._closeCompose();
         modal.querySelector('.ee-compose-close').addEventListener('click', closeCompose);
@@ -3355,6 +3556,12 @@ export class EmailEngineClient {
         };
         document.addEventListener('keydown', this._composeKeydownHandler);
 
+        form.addEventListener('input', () => {
+            if (!els.error.hidden) {
+                this._clearComposeError();
+            }
+        });
+
         form.querySelector('[data-action="show-cc"]').addEventListener('click', () => {
             const ccShown = !form.querySelector('[data-field="cc"]').hidden;
             this._showCopyFields({ cc: true, bcc: true });
@@ -3365,7 +3572,7 @@ export class EmailEngineClient {
         fileInput.addEventListener('change', () => {
             const files = Array.from(fileInput.files || []);
             fileInput.value = '';
-            this._fireAndForget(this._addComposeFiles(files));
+            this._addComposeFiles(files);
         });
         chips.addEventListener('click', e => {
             const remove = e.target.closest('.ee-compose-chip-remove');
@@ -3378,11 +3585,13 @@ export class EmailEngineClient {
         // Save the composed message as a draft instead of sending it
         const saveDraftButton = modal.querySelector('.ee-compose-save-draft');
         saveDraftButton.addEventListener('click', async () => {
-            const response = await this._runComposeAction(saveDraftButton, 'Saving...', 'Save Error', false, (...args) => this.saveDraft(...args));
+            const response = await this._runComposeAction(saveDraftButton, 'Saving...', 'Could not save the draft', false, (...args) =>
+                this.saveDraft(...args)
+            );
             if (!response) {
                 return;
             }
-            await this.alertMethod('Draft saved to the Drafts folder.', 'Success', null, 'OK');
+            this.notify('Draft saved to the Drafts folder.');
             // Refresh the list when the user is looking at the Drafts folder
             if (!this._destroyed && response.path && this.currentFolder === response.path) {
                 this._fireAndForget(this.loadMessages(this.currentFolder));
@@ -3392,10 +3601,10 @@ export class EmailEngineClient {
         // Send email
         const sendButton = modal.querySelector('.ee-compose-send');
         sendButton.addEventListener('click', async () => {
-            const response = await this._runComposeAction(sendButton, 'Sending...', 'Send Error', true, (...args) => this.sendMessage(...args));
+            const response = await this._runComposeAction(sendButton, 'Sending...', 'Could not send the message', true, (...args) => this.sendMessage(...args));
             if (response) {
                 // Submitting only queues the message; delivery happens afterwards and can still fail
-                await this.alertMethod('Message queued for delivery.', 'Queued', null, 'OK');
+                this.notify('Message queued for delivery.');
             }
         });
 
@@ -3418,25 +3627,23 @@ export class EmailEngineClient {
             return;
         }
 
+        const sidebarCompose = this.container.querySelector('.ee-sidebar-compose');
         const updateButtonPosition = () => {
             const containerRect = this.container.getBoundingClientRect();
             const margin = 20; // Desired margin from edges
+            const buttonSize = 56;
 
-            // A hidden container (display: none) reports a zero-size rect; positioning
-            // against it would push the fixed-position button off-screen. Hide the button
-            // instead and let the ResizeObserver below restore it once the container is
-            // shown - hosts often create the client inside a container that is only made
-            // visible afterwards.
-            if (!containerRect.width && !containerRect.height) {
+            // The floating button is the Compose button of the one-pane layout only. Whether
+            // that layout is on is the stylesheet's container query to decide, so read its
+            // answer (the folder pane's own Compose button is laid out) rather than repeat
+            // the breakpoint. A hidden container (display: none) reports a zero-size rect;
+            // the ResizeObserver below brings the button back once the container is shown.
+            const wide = sidebarCompose && sidebarCompose.offsetParent !== null;
+            if (wide || (!containerRect.width && !containerRect.height)) {
                 composeButton.style.display = 'none';
                 return;
             }
             composeButton.style.display = '';
-
-            // A labelled pill on roomy layouts, a round icon button where width is
-            // short and the button would cover too much of the single pane
-            composeButton.classList.toggle('ee-compose-compact', containerRect.width < NARROW_WIDTH);
-            const buttonSize = composeButton.offsetWidth || 56;
 
             // Calculate the ideal position (bottom-right of container with margin)
             const idealBottom = window.innerHeight - containerRect.bottom + margin;
@@ -3627,7 +3834,9 @@ export class EmailEngineClient {
 
         // Update UI. The compose button and modal are siblings of .ee-client, so
         // they carry the class themselves.
-        this.container.querySelectorAll('.ee-client, .ee-compose-button, .ee-compose-modal').forEach(el => el.classList.toggle('ee-dark-mode', this.darkMode));
+        this.container
+            .querySelectorAll('.ee-client, .ee-compose-button, .ee-compose-modal, .ee-toast')
+            .forEach(el => el.classList.toggle('ee-dark-mode', this.darkMode));
 
         // Update toggle button icon
         const toggleIcon = this.container.querySelector('.ee-dark-mode-icon');
@@ -3655,6 +3864,9 @@ export class EmailEngineClient {
             clearInterval(this.keepAliveTimer);
             this.keepAliveTimer = null;
         }
+
+        clearTimeout(this._toastTimer);
+        clearTimeout(this._otpCopyTimer);
 
         // Remove the compose button's window scroll/resize listeners
         if (this._composeButtonCleanup) {

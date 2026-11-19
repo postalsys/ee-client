@@ -201,7 +201,8 @@ export declare class EmailEngineClient {
     openFolder(path: string): Promise<MessageListResponse>;
     loadMessage(messageId: string): Promise<Message>;
     markAsRead(messageId: string, seen?: boolean): Promise<boolean>;
-    deleteMessage(messageId: string): Promise<boolean>;
+    /** Resolves to EmailEngine's answer; `moved` is set when the message went to Trash instead of being removed */
+    deleteMessage(messageId: string): Promise<{ deleted?: boolean; moved?: { destination?: string; message?: string } }>;
     moveMessage(messageId: string, targetPath: string): Promise<boolean>;
     /** Opens a message by ID and lists the folder that holds it */
     openMessage(messageId: string): Promise<Message | null>;
@@ -223,6 +224,10 @@ export declare class EmailEngineClient {
     downloadAttachment(attachmentId: string, suggestedFilename?: string): Promise<void>;
     downloadOriginalMessage(messageId: string, subject?: string): Promise<void>;
     formatDate(dateStr: string): string;
+    /** The date shown in the message header: weekday, date and time to the minute */
+    formatFullDate(dateStr: string): string;
+    /** Shows a short notice at the bottom of the client that goes away on its own (needs the UI) */
+    notify(message: string): void;
     formatFileSize(bytes: number): string;
     escapeHtml(value: unknown): string;
     /** HTML of the "Code requested" box for a message's one-time passcode, empty without one */

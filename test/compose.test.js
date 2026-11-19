@@ -181,6 +181,30 @@ describe('compose helpers', () => {
         failing.destroy();
     });
 
+    it('renders header addresses escaped, without empty angle brackets', () => {
+        const html = client._addressListHtml([
+            { name: 'Bob <b>', address: 'bob@example.com' },
+            { address: 'carol@example.com' },
+            { name: 'Name only' },
+            null,
+            {}
+        ]);
+        assert.equal(html, 'Bob &lt;b&gt; <span class="ee-address">&lt;bob@example.com&gt;</span>, carol@example.com, Name only');
+        assert.equal(client._addressListHtml({ address: 'one@example.com' }), 'one@example.com');
+        assert.equal(client._addressListHtml(undefined), '');
+    });
+
+    it('formats the header date to the minute and tolerates a bad value', () => {
+        const formatted = client.formatFullDate('2026-11-16T14:00:00Z');
+        assert.match(formatted, /2026/);
+        assert.doesNotMatch(formatted, /:00:00/);
+        assert.equal(client.formatFullDate('not a date'), '');
+    });
+
+    it('notify() is a no-op without the UI', () => {
+        assert.doesNotThrow(() => client.notify('Queued'));
+    });
+
     it('defaults the attachment limit and takes a host value', () => {
         assert.equal(client.maxAttachmentSize, 25 * 1024 * 1024);
         const custom = new EmailEngineClient({ account: 'acc', maxAttachmentSize: 1024 });

@@ -169,9 +169,9 @@ When the message carries a one-time passcode (the `otp` field EmailEngine 2.87+ 
 
 Add or remove the `\Seen` flag. Pass `false` to mark as unread.
 
-### `deleteMessage(messageId: string): Promise<boolean>`
+### `deleteMessage(messageId: string): Promise<object>`
 
-Delete a message (EmailEngine moves it to Trash, or removes it if already in Trash).
+Delete a message. EmailEngine moves it to Trash, or removes it when that is what the backend does for the folder it is in (an IMAP message already in Trash or Junk). Resolves to EmailEngine's answer, `{ deleted, moved }`, where `moved` (`{ destination, message }`) is set when the message went to Trash.
 
 ### `moveMessage(messageId: string, targetPath: string): Promise<boolean>`
 
@@ -245,13 +245,33 @@ When a `container` is provided the client builds a full webmail interface:
 - Replied and forwarded markers in the list and the viewer, from the `\Answered` and `$Forwarded` flags (IMAP accounts)
 - Draft messages show a "Send Draft" button that submits the stored draft for delivery after confirmation (requires EmailEngine v2.76.0 or later; editing the draft first is not supported)
 - Quoted thread history collapsed behind a "Show quoted text" control
-- Compose modal (floating button) for sending plain-text mail: To, Cc and Bcc fields that take several addresses, file attachments, and a Save Draft option that stores the message in the Drafts folder instead of sending it. Replies and forwards show the original under the text box and can include the original attachments
+- Compose form for sending plain-text mail: To, Cc and Bcc fields that take several addresses, file attachments, and a Save Draft option that stores the message in the Drafts folder instead of sending it. Replies and forwards show the original under the text box and can include the original attachments
 - Dark mode toggle with the preference persisted to `localStorage`
 - Failed requests replace the affected pane's placeholder with an error panel and a Retry button
 
+### Theming
+
+The accent colour (buttons, the selected folder, links in the compose form) comes from CSS custom properties that a host page can set on the container element:
+
+```html
+<div id="email-client" style="--ee-accent: #4c5cc5; --ee-accent-hover: #3d4bb0; --ee-accent-light: #9ba6ee"></div>
+```
+
+`--ee-accent` is the colour behind white text, `--ee-accent-hover` its pressed and hover shade, and `--ee-accent-light` the shade used for text and outlines in dark mode. Without them the client uses its own blue.
+
+When opening a message the client scrolls the page only if its top is scrolled out of view, and it honours the container's `scroll-margin-top`, so a page with a sticky header can keep the toolbar clear of it.
+
+### Compose and notices
+
+On wide layouts the Compose button sits at the top of the folder pane; in the one-pane layout it is a floating button. Problems with a message (no recipient, an address that is not one, a send the server refused) are shown inside the compose form next to its buttons, and the form keeps what was typed. Outcomes that need no answer ("Message queued for delivery.", "Draft saved to the Drafts folder.", "Message moved to Trash.") appear as a short notice at the bottom of the client, which `notify(message)` can show from the host too. `alertMethod` is used for failures outside the form.
+
+### Dark mode and styled messages
+
+A message that sets its own colours or backgrounds (most newsletters) was designed for a light page, so in dark mode it is shown on a light surface. Plain messages follow the theme.
+
 ### Failed requests
 
-When a request behind a pane fails, that pane shows why instead of sitting on its "Loading..." placeholder. The reason is the message EmailEngine returned - for example "Requested account is not yet initialized" for an account that has not connected yet, or "Requested mailbox folder was not found" - and a Retry button re-runs the request. If the server could not be reached at all, the panel says so and names the configured `apiUrl`. The underlying promise still rejects, so callers driving the client programmatically can handle the error themselves.
+When a request behind a pane fails, that pane shows why instead of sitting on its "Loading..." placeholder. The reason is the message EmailEngine returned - for example "Requested account is not yet initialized" for an account that has not connected yet, or "Requested mailbox folder was not found" - and a Retry button re-runs the request. If the server could not be reached at all, the panel says so and names the configured `apiUrl`. A message that does not exist (deleted, moved, or a link with a broken ID) is reported as "Message not found" without a Retry button, since retrying cannot help. The underlying promise still rejects, so callers driving the client programmatically can handle the error themselves.
 
 ### Quoted thread history
 
