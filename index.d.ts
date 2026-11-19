@@ -53,7 +53,10 @@ export interface Message {
     from?: EmailAddress;
     to?: EmailAddress[];
     cc?: EmailAddress[];
+    replyTo?: EmailAddress[];
     date: string;
+    /** IMAP-style flags, e.g. "\\Seen", "\\Answered", "$Forwarded" */
+    flags?: string[];
     unseen: boolean;
     draft?: boolean;
     /** Special-use flag of the folder the message is stored in, e.g. "\\Drafts" */
@@ -71,6 +74,55 @@ export interface MessageListResponse {
 }
 
 export type SendRecipient = string | EmailAddress;
+
+/** A file to attach, as the compose form reads it */
+export interface ComposeAttachment {
+    filename: string;
+    contentType?: string;
+    /** Base64 encoded file content */
+    content: string;
+}
+
+/** EmailEngine's submit reference block: what the message replies to or forwards */
+export interface MessageReference {
+    message: string;
+    action: 'reply' | 'reply-all' | 'forward';
+    /** Quote the referenced message under the new text */
+    inline?: boolean;
+    /** Carry the referenced message's attachments over (forward only) */
+    forwardAttachments?: boolean;
+}
+
+/** Optional fields for `sendMessage()` and `saveDraft()` */
+export interface ComposeOptions {
+    cc?: SendRecipient | SendRecipient[];
+    bcc?: SendRecipient | SendRecipient[];
+    attachments?: ComposeAttachment[];
+    reference?: MessageReference | null;
+}
+
+/** Recipients, subject and reference of a reply, reply-all or forward, from `prepareResponse()` */
+export interface PreparedResponse {
+    to: EmailAddress[];
+    cc: EmailAddress[];
+    subject: string;
+    reference: MessageReference;
+}
+
+/** Prefill for `compose()`. Address fields take a typed string or address entries */
+export interface ComposePrefill {
+    to?: string | EmailAddress[];
+    cc?: string | EmailAddress[];
+    bcc?: string | EmailAddress[];
+    subject?: string;
+    text?: string;
+}
+
+/** What `onNavigate` is told whenever the open folder or message changes */
+export interface NavigationState {
+    path: string | null;
+    messageId: string | null;
+}
 
 /**
  * Optional payload for `submitDraft()`. Mirrors the SubmitDraft schema of the
@@ -112,6 +164,12 @@ export interface EmailEngineClientOptions {
     showDarkModeToggle?: boolean;
     /** CSP nonce set on the <style> element the widget appends, for a host page whose style-src-elem requires one */
     styleNonce?: string;
+    /** EmailEngine message ID to open on startup (with its folder) instead of the inbox */
+    message?: string;
+    /** Called whenever the open folder or message changes, e.g. to keep the address bar in step */
+    onNavigate?: (state: NavigationState) => void;
+    /** Total size limit for files attached in the compose form, in bytes (default 25 MB) */
+    maxAttachmentSize?: number;
 }
 
 export declare class EmailEngineClient {
@@ -126,6 +184,8 @@ export declare class EmailEngineClient {
     showDarkModeToggle: boolean;
     currentFolder: string | null;
     currentMessage: Message | null;
+    onNavigate: ((state: NavigationState) => void) | null;
+    maxAttachmentSize: number;
     folders: Folder[];
     messages: Message[];
     nextPageCursor: string | null;
@@ -135,13 +195,30 @@ export declare class EmailEngineClient {
 
     apiRequest(method: string, endpoint: string, data?: any): Promise<any>;
     loadFolders(): Promise<Folder[]>;
+    /** Loads a page of a folder's message list; the open message stays open */
     loadMessages(path: string, cursor?: string | null): Promise<MessageListResponse>;
+    /** Closes the open message and lists another folder */
+    openFolder(path: string): Promise<MessageListResponse>;
     loadMessage(messageId: string): Promise<Message>;
     markAsRead(messageId: string, seen?: boolean): Promise<boolean>;
     deleteMessage(messageId: string): Promise<boolean>;
     moveMessage(messageId: string, targetPath: string): Promise<boolean>;
-    sendMessage(to: SendRecipient | SendRecipient[], subject: string, text: string): Promise<any>;
-    saveDraft(to?: SendRecipient | SendRecipient[] | null, subject?: string, text?: string): Promise<any>;
+    /** Opens a message by ID and lists the folder that holds it */
+    openMessage(messageId: string): Promise<Message | null>;
+    sendMessage(to: SendRecipient | SendRecipient[], subject: string, text: string, options?: ComposeOptions): Promise<any>;
+    saveDraft(to?: SendRecipient | SendRecipient[] | null, subject?: string, text?: string, options?: ComposeOptions): Promise<any>;
+    /** Parses a typed address field ("Name <a@example.com>, b@example.com") into address entries */
+    parseAddressList(value: string | null | undefined): EmailAddress[];
+    /** Formats address entries for an address field; the reverse of parseAddressList() */
+    formatAddressList(list: EmailAddress | EmailAddress[] | null | undefined): string;
+    /** Recipients, subject and reference for answering msg; ownAddress is left out of the recipients */
+    prepareResponse(msg: Message, action: 'reply' | 'reply-all' | 'forward', ownAddress?: string | null): PreparedResponse;
+    /** Opens the compose form, optionally prefilled (needs the UI) */
+    compose(prefill?: ComposePrefill): void;
+    /** Opens the compose form as a reply to a message, the open one by default (needs the UI) */
+    reply(messageId?: string | null, options?: { all?: boolean }): Promise<void>;
+    /** Opens the compose form to forward a message, the open one by default (needs the UI) */
+    forward(messageId?: string | null): Promise<void>;
     submitDraft(messageId: string, options?: SubmitDraftOptions | null): Promise<any>;
     downloadAttachment(attachmentId: string, suggestedFilename?: string): Promise<void>;
     downloadOriginalMessage(messageId: string, subject?: string): Promise<void>;

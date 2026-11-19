@@ -127,6 +127,9 @@ new EmailEngineClient(options);
 | `darkMode`           | `boolean`     | stored preference       | Initial dark mode. Overrides the preference stored by the builtin toggle.                                                                                                                                                                   |
 | `showDarkModeToggle` | `boolean`     | `true`                  | Render the builtin dark mode toggle. Set `false` when the host application drives the mode through `client.setDarkMode(enabled)` (for example in sync with its own theme switch).                                                           |
 | `styleNonce`         | `string`      | none                    | Nonce set on the `<style>` elements the widget creates (its own stylesheet and the one inside the message body's shadow root). Pass the page's Content-Security-Policy nonce when `style-src-elem` allows no inline stylesheet without one. |
+| `message`            | `string`      | none                    | EmailEngine message ID to open on startup instead of the inbox. The folder holding it is listed next to it (the inbox for Gmail API accounts, which report no folder). Use it to deep-link into one message.                                |
+| `onNavigate`         | `function`    | none                    | Called with `{ path, messageId }` whenever the open folder or message changes, so the host page can keep its address bar in step (`history.replaceState`). `messageId` is `null` when no message is open.                                   |
+| `maxAttachmentSize`  | `number`      | `25 MB`                 | Total size limit, in bytes, of the files attached in the compose form. Files are sent base64 encoded in one JSON request, so keep it under EmailEngine's API body limit.                                                                    |
 
 UI rendering, the compose modal, and dark mode only activate when a `container` is supplied. In a non-browser environment the UI is skipped and the instance behaves as a plain API client.
 
@@ -154,7 +157,7 @@ Load all folders/mailboxes for the account. Renders the folder tree when a conta
 
 ### `loadMessages(path: string, cursor?: string): Promise<MessageListResponse>`
 
-Load a page of messages from a folder. Pass `nextPageCursor` / `prevPageCursor` from a previous response to paginate. Resolves to `{ messages, nextPageCursor, prevPageCursor }`.
+Load a page of messages from a folder. Pass `nextPageCursor` / `prevPageCursor` from a previous response to paginate. Resolves to `{ messages, nextPageCursor, prevPageCursor }`. The open message stays open; `openFolder(path)` closes it and lists another folder, which is what a click in the folder tree does.
 
 ### `loadMessage(messageId: string): Promise<Message>`
 
@@ -174,19 +177,41 @@ Delete a message (EmailEngine moves it to Trash, or removes it if already in Tra
 
 Move a message to another folder.
 
-### `sendMessage(to, subject, text): Promise<object>`
+### `openMessage(messageId: string): Promise<Message | null>`
 
-Send a plain-text email. `to` may be:
+Open a message by its ID and list the folder that holds it, the way the `message` option does on startup. A message that cannot be loaded shows its error in the viewer and the inbox is listed instead.
+
+### `sendMessage(to, subject, text, options?): Promise<object>`
+
+Send a plain-text email. Submitting queues the message; EmailEngine delivers it afterwards. `to` may be:
 
 - a string address: `'user@example.com'`
 - an object: `{ name: 'John Doe', address: 'john@example.com' }`
 - an array of strings and/or objects for multiple recipients
 
+The optional `options` object takes:
+
+- `cc`, `bcc`: recipients, in the same forms as `to`
+- `attachments`: `[{ filename, contentType, content }]` with `content` base64 encoded
+- `reference`: EmailEngine's submit reference block, `{ message, action, inline, forwardAttachments }`. With it EmailEngine sets the threading headers, quotes the referenced message when `inline` is true, carries its attachments over on a forward with `forwardAttachments`, and flags the original `\Answered` / `$Forwarded` once the message is delivered (IMAP accounts)
+
 Resolves to EmailEngine's submit response.
 
-### `saveDraft(to?, subject?, text?): Promise<object>`
+### `reply(messageId?, { all }?)`, `forward(messageId?)`, `compose(prefill?)`
 
-Store a plain-text message as a draft instead of sending it (`POST /v1/account/{account}/message`). The message is uploaded to the account's Drafts special-use folder with the `\Draft` flag set and the account's own name and address as the sender, so it can later be delivered with `submitDraft()`. `to` accepts the same values as `sendMessage()` and may be omitted for a draft without recipients. Resolves to EmailEngine's upload response (`{ id, path, uid, ... }`).
+Open the compose form (UI only). `reply()` and `forward()` act on the open message when no ID is given and fill in the recipients, the `Re:` / `Fwd:` subject and the reference; the original is shown under the text box and quoted by EmailEngine when the message is sent. `reply(id, { all: true })` resolves reply-all in the client: the original sender goes in To and the other recipients in Cc, without the account's own address, and the message goes out exactly as the form shows it. `compose()` opens a blank form and takes `{ to, cc, bcc, subject, text }` to prefill it.
+
+### `prepareResponse(msg, action, ownAddress?): object`
+
+The recipients, subject and reference of a `'reply'`, `'reply-all'` or `'forward'` of a message, as `reply()` and `forward()` prefill them: `{ to, cc, subject, reference }`. A reply goes to the message's Reply-To, otherwise its sender, or to its recipients when the account sent it. Useful for building a compose UI of your own.
+
+### `parseAddressList(value)` / `formatAddressList(list)`
+
+Convert between a typed address field (`"Doe, John" <john@example.com>, jane@example.com`) and address entries.
+
+### `saveDraft(to?, subject?, text?, options?): Promise<object>`
+
+Store a plain-text message as a draft instead of sending it (`POST /v1/account/{account}/message`). The message is uploaded to the account's Drafts special-use folder with the `\Draft` flag set and the account's own name and address as the sender, so it can later be delivered with `submitDraft()`. `to` and `options` accept the same values as in `sendMessage()`, and `to` may be omitted for a draft without recipients. A draft saved with a `reference` keeps the threading headers and the quote. Resolves to EmailEngine's upload response (`{ id, path, uid, ... }`).
 
 ### `submitDraft(messageId: string, options?: SubmitDraftOptions): Promise<object>`
 
@@ -216,10 +241,11 @@ When a `container` is provided the client builds a full webmail interface:
 
 - Folder tree with special-folder ordering (Inbox, Drafts, Sent, Trash, Junk, Archive) and nested folders
 - Paginated message list with a selectable page size (persisted to `localStorage`)
-- Message viewer with mark read/unread, delete, move-to-folder, download original, and attachment downloads
+- Message viewer with reply, reply all, forward, mark read/unread, delete, move-to-folder, download original, and attachment downloads
+- Replied and forwarded markers in the list and the viewer, from the `\Answered` and `$Forwarded` flags (IMAP accounts)
 - Draft messages show a "Send Draft" button that submits the stored draft for delivery after confirmation (requires EmailEngine v2.76.0 or later; editing the draft first is not supported)
 - Quoted thread history collapsed behind a "Show quoted text" control
-- Compose modal (floating button) for sending plain-text mail, with a Save Draft option that stores the message in the Drafts folder instead of sending it
+- Compose modal (floating button) for sending plain-text mail: To, Cc and Bcc fields that take several addresses, file attachments, and a Save Draft option that stores the message in the Drafts folder instead of sending it. Replies and forwards show the original under the text box and can include the original attachments
 - Dark mode toggle with the preference persisted to `localStorage`
 - Failed requests replace the affected pane's placeholder with an error panel and a Retry button
 
