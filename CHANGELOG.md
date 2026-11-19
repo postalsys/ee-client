@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/postalsys/ee-client/compare/v1.10.0...v1.11.0) (2026-11-19)
+
+
+### Features
+
+* reply, reply all and forward from the message viewer ([ba62c5a](https://github.com/postalsys/ee-client/commit/ba62c5ab4bb7767f2fe6e5d5a0693b6c156d20da))
+
 ## [1.10.0](https://github.com/postalsys/ee-client/compare/v1.9.0...v1.10.0) (2026-10-29)
 
 
