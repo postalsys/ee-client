@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.1](https://github.com/postalsys/ee-client/compare/v1.11.0...v1.11.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* polish the message browser after a UX review ([e45e8c2](https://github.com/postalsys/ee-client/commit/e45e8c243a3812b99800a11b96c4410212946a49))
+
 ## [1.11.0](https://github.com/postalsys/ee-client/compare/v1.10.0...v1.11.0) (2026-11-19)
 
 
