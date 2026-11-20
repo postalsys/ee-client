@@ -19,14 +19,25 @@ test.describe('message viewer', () => {
     test('lists attachments with their names and sizes', async ({ app, page }) => {
         await app.start();
         await app.openMessage('Quarterly report');
-        await expect(page.locator('.ee-attachments-title')).toHaveText('Attachments (2)');
+        await expect(page.locator('.ee-attachments-title')).toHaveText('2 attachments');
         await expect(page.locator('.ee-attachment-name')).toHaveText(['q3-report.pdf', 'figures.csv']);
+        await expect(page.locator('.ee-attachment-type')).toHaveText(['PDF', 'CSV']);
+        await expect(page.locator('.ee-attachment-size')).toHaveText(['33 Bytes', '24 Bytes']);
+    });
+
+    test('does not list images the body shows in place as attachments', async ({ app, page }) => {
+        await app.start();
+        await app.openMessage('Newsletter: November edition');
+        await expect(page.locator('.ee-attachments')).toHaveCount(0);
     });
 
     test('shows a plain text message as preformatted text', async ({ app, page }) => {
         await app.start();
         await app.openMessage('Welcome aboard');
         await expect(body(page)).toContainText('Your account is ready.');
+        // EmailEngine renders text-only mail with a 12px inline font; the viewer keeps the client's size
+        const size = await body(page).evaluate(host => getComputedStyle(host.shadowRoot.querySelector('.ee-message-body-content p')).fontSize);
+        expect(size).toBe('14px');
     });
 
     test('keeps the message apart from the host page styles', async ({ app, page }) => {

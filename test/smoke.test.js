@@ -52,7 +52,7 @@ describe('ee-client', () => {
         assert.deepEqual(folders, [{ path: 'INBOX' }]);
         assert.equal(fetchMock.mock.callCount(), 1);
         const [url, options] = fetchMock.mock.calls[0].arguments;
-        assert.equal(url, 'http://ee.test/v1/account/a%2Fb%23c/mailboxes');
+        assert.equal(url, 'http://ee.test/v1/account/a%2Fb%23c/mailboxes?counters=true');
         assert.equal(options.method, 'GET');
         assert.equal(options.headers.Authorization, 'Bearer tok');
         client.destroy();

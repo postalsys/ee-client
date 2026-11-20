@@ -39,7 +39,7 @@ test.describe('failed requests', () => {
         await app.start({ message: 'AAAAAQAAB9A' }, { waitForList: false });
         await expect(page.locator('.ee-message-viewer .ee-error-title')).toHaveText('Message not found');
         await app.waitForList();
-        await expect(page.locator('.ee-message-list .ee-pane-title')).toHaveText('INBOX');
+        await expect(page.locator('.ee-message-list .ee-pane-title')).toHaveText('Inbox');
     });
 
     test('reports a failed action instead of doing nothing', async ({ app, page }) => {

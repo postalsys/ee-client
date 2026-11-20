@@ -35,6 +35,19 @@ const MESSAGE_BODY_STYLES = `
         overflow-x: auto;
     }
 
+    /* A plain-text message: EmailEngine renders it as HTML with a fixed 12px font, inline, so the
+       override needs the weight of !important; the message itself had no styling to lose */
+    .ee-message-body-content[data-plain] :is(div, p, span, pre) {
+        font-family: inherit !important;
+        font-size: inherit !important;
+    }
+
+    .ee-message-body-content > pre {
+        white-space: pre-wrap;
+        font-family: inherit;
+        margin: 0;
+    }
+
     /* Quoted thread history, folded away by EmailEngine - see _labelCollapsedThreads() */
     .ee-collapsed-thread {
         margin-top: 12px;
@@ -91,8 +104,72 @@ const ICON_PATHS = {
     paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
     close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
-    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    inbox: '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
+    file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+    junk: '<path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2z"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+    archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+    folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+    star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+    minimize: '<path d="M5 12h14"/>',
+    expand: '<path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>',
+    bold: '<path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/>',
+    italic: '<line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/>',
+    list: '<path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/>',
+    listOrdered:
+        '<path d="M10 12h11"/><path d="M10 18h11"/><path d="M10 6h11"/><path d="M4 10h2"/><path d="M4 6h1v4"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>'
 };
+
+// Folder icons by special-use flag; any other folder gets the plain folder icon
+const FOLDER_ICONS = {
+    '\\Inbox': 'inbox',
+    '\\Drafts': 'file',
+    '\\Sent': 'send',
+    '\\Trash': 'trash',
+    '\\Junk': 'junk',
+    '\\Archive': 'archive',
+    '\\All': 'archive',
+    '\\Flagged': 'star'
+};
+
+// The name a folder is shown by. Servers name the inbox "INBOX" (RFC 3501 makes the name special
+// and case-insensitive), which reads as shouting next to "Drafts" and "Sent".
+function folderDisplayName(folder) {
+    if (!folder) {
+        return '';
+    }
+    if (folder.specialUse === '\\Inbox' && /^inbox$/i.test(folder.name)) {
+        return 'Inbox';
+    }
+    return folder.name;
+}
+
+// What a reader counts as attachments: not the images that the HTML body shows in place
+// (EmailEngine marks those embedded)
+function listedAttachments(list) {
+    return (Array.isArray(list) ? list : []).filter(att => att && !att.embedded);
+}
+
+// An attachment's size in bytes. EmailEngine reports encodedSize, the length of the base64 the
+// file travels in, which is four thirds of the file; size is used when a backend gives it.
+function attachmentSize(att) {
+    if (att.size > 0) {
+        return att.size;
+    }
+    return att.encodedSize > 0 ? Math.floor((att.encodedSize * 3) / 4) : 0;
+}
+
+// A short type label for an attachment card: the extension, or the MIME subtype without one
+function attachmentType(att) {
+    const match = /\.([a-z0-9]{1,5})$/i.exec(att.filename || '');
+    if (match) {
+        return match[1].toUpperCase();
+    }
+    const subtype = String(att.contentType || '').split('/')[1] || '';
+    return /^[a-z0-9]{1,5}$/i.test(subtype) ? subtype.toUpperCase() : 'FILE';
+}
 
 // Default cap on the files attached in the compose form, in bytes. They travel base64 encoded
 // inside one JSON request, which grows them by a third, and most providers refuse a message
@@ -216,6 +293,8 @@ export class EmailEngineClient {
         this.messages = [];
         this.nextPageCursor = null;
         this.prevPageCursor = null;
+        // Position of the listed page: { page (0-based), total } when the server reports them
+        this.listPosition = null;
 
         // Set once destroy() runs; guards async completions (loadFolders,
         // loadMessages, loadMessage) from re-rendering or scrolling into a
@@ -352,7 +431,8 @@ export class EmailEngineClient {
         this._setPaneHtml('.ee-folder-tree', '<div class="ee-loading">Loading folders...</div>');
 
         try {
-            const data = await this.apiRequest('GET', `${this._accountPath()}/mailboxes`);
+            // counters adds each folder's message and unread counts (a STATUS per folder on IMAP)
+            const data = await this.apiRequest('GET', `${this._accountPath()}/mailboxes?counters=true`);
             this.folders = data.mailboxes || [];
             this._folderTreeCache = null;
             if (this.container) {
@@ -382,6 +462,7 @@ export class EmailEngineClient {
             this.currentFolder = path;
             this.nextPageCursor = data.nextPageCursor || null;
             this.prevPageCursor = data.prevPageCursor || null;
+            this.listPosition = Number.isInteger(data.page) && Number.isInteger(data.total) ? { page: data.page, total: data.total } : null;
 
             if (this.container) {
                 this.renderMessageList();
@@ -433,6 +514,9 @@ export class EmailEngineClient {
 
             const msg = this.messages.find(m => m.id === messageId);
             if (msg) {
+                if (msg.unseen) {
+                    this._adjustUnseen(this.currentFolder, -1);
+                }
                 msg.unseen = false;
                 if (this.container) {
                     this.renderMessageList();
@@ -485,6 +569,9 @@ export class EmailEngineClient {
 
             const msg = this.messages.find(m => m.id === messageId);
             if (msg) {
+                if (msg.unseen === seen) {
+                    this._adjustUnseen(this.currentFolder, seen ? -1 : 1);
+                }
                 msg.unseen = !seen;
                 if (this.container) {
                     this.renderMessageList();
@@ -869,15 +956,14 @@ export class EmailEngineClient {
 
     // Header for every state of the message list pane, titled with the folder
     // being shown. In the single-pane layout its back button leads to the folders.
-    _messageListHeader(path, controls = '') {
+    _messageListHeader(path) {
         const folder = path && this.folders.find(f => f.path === path);
         return `
             <div class="ee-pane-header">
                 <div class="ee-pane-heading">
                     ${this._iconButton('show-folders', 'back', 'Folders', 'ee-nav-button')}
-                    <span class="ee-pane-title">${this.escapeHtml(folder ? folder.name : 'Messages')}</span>
+                    <span class="ee-pane-title">${this.escapeHtml(folder ? folderDisplayName(folder) : 'Messages')}</span>
                 </div>
-                ${controls}
             </div>
         `;
     }
@@ -918,12 +1004,13 @@ export class EmailEngineClient {
         const diff = now - date;
 
         if (diff < 86400000) {
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
         } else if (diff < 604800000) {
-            return date.toLocaleDateString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-        } else {
+            return date.toLocaleDateString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+        } else if (date.getFullYear() === now.getFullYear()) {
             return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
         }
+        return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
     }
 
     // The date in the message header: weekday, date and time to the minute
@@ -1187,66 +1274,80 @@ export class EmailEngineClient {
             .ee-folder-list {
                 list-style: none;
                 margin: 0;
-                padding: 0;
+                padding: 6px 8px;
+                display: flex;
+                flex-direction: column;
+                gap: 1px;
             }
-            
+
             .ee-folder-item {
-                cursor: pointer;
-                border-bottom: 1px solid #e0e0e0;
                 position: relative;
             }
-            
-            .ee-folder-item:hover {
-                background: #e8e8e8;
-            }
-            
-            .ee-folder-item.active {
-                background: var(--_accent);
-                color: white;
-            }
-            
-            .ee-folder-item.active::before {
-                content: '';
-                position: absolute;
-                left: 0;
-                top: 0;
-                bottom: 0;
-                width: 3px;
-                background: var(--_accent-hover);
-            }
-            
+
+            /* The whole row is the button */
             .ee-folder-content {
-                padding: 8px 16px 8px 0px;
                 display: flex;
                 align-items: center;
-                position: relative;
+                gap: 10px;
+                width: 100%;
+                min-height: 34px;
+                padding: 6px 10px 6px 12px;
+                border: none;
+                border-radius: 6px;
+                background: transparent;
+                color: inherit;
+                font: inherit;
+                text-align: left;
+                cursor: pointer;
             }
-            
-            .ee-folder-indent {
-                color: #999;
-                font-size: 12px;
-                margin-right: 4px;
-                font-family: monospace;
+
+            .ee-folder-content:hover {
+                background: #eef1f4;
             }
-            
-            .ee-folder-name {
-                font-weight: 500;
-                flex: 1;
+
+            .ee-folder-content:focus-visible,
+            .ee-message-item:focus-visible,
+            .ee-attachment-item:focus-visible {
+                outline: 2px solid var(--_accent);
+                outline-offset: -2px;
             }
-            
-            .ee-folder-name.has-children {
+
+            .ee-folder-item.active .ee-folder-content {
+                background: color-mix(in srgb, var(--_accent) 14%, white);
+                color: var(--_accent-hover);
                 font-weight: 600;
             }
-            
-            .ee-folder-item.active .ee-folder-indent {
-                color: rgba(255, 255, 255, 0.7);
-            }
-            
-            .ee-folder-count {
-                font-size: 12px;
-                opacity: 0.7;
-                margin-left: 8px;
+
+            .ee-folder-icon {
+                display: inline-flex;
                 flex-shrink: 0;
+                color: #6b7280;
+            }
+
+            .ee-folder-item.active .ee-folder-icon {
+                color: inherit;
+            }
+
+            .ee-folder-name {
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .ee-folder-count {
+                flex-shrink: 0;
+                min-width: 20px;
+                padding: 0 6px;
+                border-radius: 10px;
+                background: var(--_accent);
+                color: white;
+                font-size: 11px;
+                font-weight: 600;
+                line-height: 18px;
+                text-align: center;
+                font-variant-numeric: tabular-nums;
             }
             
             .ee-main {
@@ -1265,48 +1366,79 @@ export class EmailEngineClient {
                 flex-direction: column;
             }
             
+            /* A list row is a button holding spans laid out as blocks */
             .ee-message-item {
-                padding: 12px 16px;
+                display: block;
+                width: 100%;
+                padding: 10px 16px 10px 24px;
+                border: none;
                 border-bottom: 1px solid #e0e0e0;
+                background: transparent;
+                color: inherit;
+                font: inherit;
+                text-align: left;
                 cursor: pointer;
+                position: relative;
             }
-            
+
             .ee-message-item:hover {
                 background: #f8f8f8;
             }
-            
+
             .ee-message-item.active {
                 background: color-mix(in srgb, var(--_accent) 12%, white);
             }
-            
-            .ee-message-item.unread {
+
+            .ee-message-item.unread .ee-message-from,
+            .ee-message-item.unread .ee-message-subject-text {
                 font-weight: 600;
             }
-            
+
+            .ee-unread-dot {
+                position: absolute;
+                left: 9px;
+                top: 17px;
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--_accent);
+            }
+
             .ee-message-header {
                 display: flex;
                 justify-content: space-between;
-                margin-bottom: 4px;
+                margin-bottom: 2px;
             }
-            
+
             .ee-message-from {
                 flex: 1;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
             }
-            
+
+            .ee-message-to-label {
+                color: #666;
+                font-weight: 400;
+            }
+
             .ee-message-date {
                 font-size: 12px;
                 color: #666;
                 flex-shrink: 0;
                 margin-left: 8px;
+                font-variant-numeric: tabular-nums;
             }
-            
+
             .ee-message-subject {
                 display: flex;
                 align-items: center;
-                margin-bottom: 2px;
+                color: #444;
+            }
+
+            .ee-message-preview {
+                display: block;
+                margin-top: 2px;
             }
             
             .ee-message-subject-text {
@@ -1609,40 +1741,69 @@ export class EmailEngineClient {
                 margin-bottom: 8px;
                 color: #333;
             }
-            
+
+            .ee-attachment-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                gap: 8px;
+            }
+
             .ee-attachment-item {
                 display: flex;
                 align-items: center;
-                padding: 8px;
-                margin-bottom: 4px;
-                background: #f8f8f8;
+                gap: 10px;
+                min-width: 0;
+                padding: 8px 10px;
+                background: #f8f9fa;
                 border: 1px solid #e0e0e0;
-                border-radius: 4px;
+                border-radius: 6px;
+                color: inherit;
+                font: inherit;
+                text-align: left;
                 cursor: pointer;
                 transition: background 0.2s;
             }
-            
+
             .ee-attachment-item:hover {
-                background: #f0f0f0;
+                background: #eef1f4;
             }
-            
-            .ee-attachment-icon {
-                display: flex;
-                margin-right: 8px;
-                color: #666;
+
+            .ee-attachment-type {
+                flex-shrink: 0;
+                width: 38px;
+                padding: 6px 0;
+                border-radius: 4px;
+                background: color-mix(in srgb, var(--_accent) 12%, white);
+                color: var(--_accent-hover);
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.03em;
+                text-align: center;
             }
-            
+
             .ee-attachment-info {
+                display: flex;
+                flex-direction: column;
                 flex: 1;
+                min-width: 0;
             }
-            
+
             .ee-attachment-name {
                 font-weight: 500;
                 color: #333;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
-            
+
             .ee-attachment-size {
                 font-size: 12px;
+                color: #666;
+            }
+
+            .ee-attachment-download {
+                display: inline-flex;
+                flex-shrink: 0;
                 color: #666;
             }
             
@@ -1739,18 +1900,30 @@ export class EmailEngineClient {
                 overflow-y: auto;
             }
             
-            .ee-pagination-controls {
+            /* Paging, under the list: the position, the arrows and the page size */
+            .ee-list-footer {
                 display: flex;
-                gap: 6px;
                 align-items: center;
+                gap: 6px;
                 flex-shrink: 0;
+                padding: 6px 12px 6px 16px;
+                border-top: 1px solid #e0e0e0;
+                background: #f8f9fa;
             }
-            
+
+            .ee-list-range {
+                flex: 1;
+                font-size: 12px;
+                color: #666;
+                font-variant-numeric: tabular-nums;
+                white-space: nowrap;
+            }
+
             .ee-page-size-selector {
                 display: flex;
                 gap: 6px;
                 align-items: center;
-                margin-left: 4px;
+                margin-left: 6px;
             }
             
             .ee-page-size-label {
@@ -1787,6 +1960,11 @@ export class EmailEngineClient {
                 transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
             }
             
+            /* An open message on a phone has its own reply actions; the button would cover the text */
+            .ee-client[data-view="message"] ~ .ee-compose-button {
+                display: none;
+            }
+
             .ee-compose-button:hover {
                 background: var(--_accent-hover);
                 transform: translateY(-1px);
@@ -2322,15 +2500,20 @@ export class EmailEngineClient {
                 border-color: #333;
             }
 
-            .ee-dark-mode .ee-folder-item {
-                border-color: #333;
-            }
-
-            .ee-dark-mode .ee-folder-item:hover {
+            .ee-dark-mode .ee-folder-content:hover {
                 background: #2a2a2a;
             }
 
-            .ee-dark-mode .ee-folder-item.active {
+            .ee-dark-mode .ee-folder-item.active .ee-folder-content {
+                background: color-mix(in srgb, var(--_accent) 35%, #1a1a1a);
+                color: #fff;
+            }
+
+            .ee-dark-mode .ee-folder-icon {
+                color: #999;
+            }
+
+            .ee-dark-mode .ee-folder-count {
                 background: var(--_accent-hover);
             }
 
@@ -2353,8 +2536,25 @@ export class EmailEngineClient {
 
             .ee-dark-mode .ee-message-date,
             .ee-dark-mode .ee-message-preview,
-            .ee-dark-mode .ee-attachment-indicator {
+            .ee-dark-mode .ee-message-to-label,
+            .ee-dark-mode .ee-attachment-indicator,
+            .ee-dark-mode .ee-list-range,
+            .ee-dark-mode .ee-attachment-download {
                 color: #999;
+            }
+
+            .ee-dark-mode .ee-message-subject {
+                color: #ccc;
+            }
+
+            .ee-dark-mode .ee-list-footer {
+                background: #252525;
+                border-color: #333;
+            }
+
+            .ee-dark-mode .ee-attachment-type {
+                background: color-mix(in srgb, var(--_accent) 30%, #1a1a1a);
+                color: #e0e0e0;
             }
 
             .ee-dark-mode .ee-pane-header {
@@ -2494,11 +2694,6 @@ export class EmailEngineClient {
             .ee-dark-mode .ee-otp-status,
             .ee-dark-mode .ee-otp-note {
                 color: #999;
-            }
-
-            .ee-dark-mode .ee-pagination {
-                background: #252525;
-                border-color: #333;
             }
 
             /* The compose button and modal sit beside .ee-client, not inside it, so
@@ -2710,39 +2905,112 @@ export class EmailEngineClient {
             return;
         }
 
-        const sortedFolders = this.buildFolderTree();
-        // Precompute which paths are some folder's parent so the per-row
-        // has-children check is O(1) instead of scanning this.folders each time.
-        const parentPaths = new Set(this.folders.map(f => f.parentPath));
-
         const html = `
             <ul class="ee-folder-list">
-                ${sortedFolders
-                    .map(({ folder, depth }) => {
-                        const hasChildren = parentPaths.has(folder.path);
-                        return `
-                        <li class="ee-folder-item ${folder.path === this.currentFolder ? 'active' : ''}" 
-                            data-path="${this.escapeHtml(folder.path)}" 
-                            data-depth="${depth}">
-                            <div class="ee-folder-content" style="padding-left: ${8 + depth * 12}px;">
-                                ${depth > 0 ? '<span class="ee-folder-indent">└ </span>' : ''}
-                                <span class="ee-folder-name ${hasChildren ? 'has-children' : ''}">${this.escapeHtml(folder.name)}</span>
-                                ${folder.status && folder.status.messages > 0 ? `<span class="ee-folder-count">${folder.status.messages}</span>` : ''}
-                            </div>
-                        </li>
-                    `;
-                    })
+                ${this.buildFolderTree()
+                    .map(({ folder, depth }) => this._folderItemHtml(folder, depth))
                     .join('')}
             </ul>
         `;
         folderTree.innerHTML = html;
 
         folderTree.querySelectorAll('.ee-folder-item').forEach(item => {
-            item.addEventListener('click', () => {
+            item.querySelector('.ee-folder-content').addEventListener('click', () => {
                 const path = item.getAttribute('data-path');
                 this._fireAndForget(this.openFolder(path));
             });
         });
+    }
+
+    // One folder row: an icon by special use, the name, and the unread count. The row is a button,
+    // so the folders can be reached and opened from the keyboard.
+    _folderItemHtml(folder, depth) {
+        const active = folder.path === this.currentFolder;
+        const unseen = folder.status && folder.status.unseen > 0 ? folder.status.unseen : 0;
+        const name = folderDisplayName(folder);
+        const label = unseen ? `${name}, ${unseen} unread` : name;
+        return `
+            <li class="ee-folder-item${active ? ' active' : ''}" data-path="${this.escapeHtml(folder.path)}" data-depth="${depth}">
+                <button type="button" class="ee-folder-content" style="padding-left: ${12 + depth * 16}px;" aria-label="${this.escapeHtml(label)}"${active ? ' aria-current="true"' : ''}>
+                    <span class="ee-folder-icon">${icon(FOLDER_ICONS[folder.specialUse] || 'folder', 16)}</span>
+                    <span class="ee-folder-name">${this.escapeHtml(name)}</span>
+                    ${unseen ? `<span class="ee-folder-count">${unseen}</span>` : ''}
+                </button>
+            </li>
+        `;
+    }
+
+    // Keeps a folder's unread count in step with a read state the client changed itself, so the
+    // badge does not wait for the next folder listing
+    _adjustUnseen(path, delta) {
+        const folder = this.folders.find(f => f.path === path);
+        if (!folder || !folder.status || typeof folder.status.unseen !== 'number') {
+            return;
+        }
+        folder.status.unseen = Math.max(0, folder.status.unseen + delta);
+        this.renderFolderList();
+    }
+
+    // Folders whose messages the account sent itself: the list names the recipients instead
+    _isOutgoingFolder(path) {
+        const folder = this.folders.find(f => f.path === path);
+        return !!folder && (folder.specialUse === '\\Sent' || folder.specialUse === '\\Drafts');
+    }
+
+    // The correspondent column of a list row: the sender, or "To: ..." in Sent and Drafts
+    _correspondentHtml(msg, outgoing) {
+        if (outgoing) {
+            const names = addressEntries(msg.to)
+                .concat(addressEntries(msg.cc))
+                .map(entry => entry.name || entry.address);
+            return names.length ? `<span class="ee-message-to-label">To:</span> ${this.escapeHtml(names.join(', '))}` : '(no recipients)';
+        }
+        return this.escapeHtml(msg.from ? msg.from.name || msg.from.address : 'Unknown');
+    }
+
+    _messageItemHtml(msg, outgoing) {
+        const active = msg.id === (this.currentMessage && this.currentMessage.id);
+        const attachments = listedAttachments(msg.attachments).length;
+        const status = msg.unseen ? '<span class="ee-unread-dot" role="img" aria-label="Unread"></span>' : '';
+        return `
+            <button type="button" class="ee-message-item${msg.unseen ? ' unread' : ''}${active ? ' active' : ''}" data-id="${this.escapeHtml(msg.id)}"${active ? ' aria-current="true"' : ''}>
+                <span class="ee-message-header">
+                    ${status}
+                    <span class="ee-message-from">${this._correspondentHtml(msg, outgoing)}</span>
+                    <span class="ee-message-date">${this.formatDate(msg.date)}</span>
+                </span>
+                <span class="ee-message-subject">
+                    ${this._responseMarkers(msg)}
+                    <span class="ee-message-subject-text">${this.escapeHtml(msg.subject || '(no subject)')}</span>
+                    ${attachments ? `<span class="ee-attachment-indicator" role="img" aria-label="${attachments} attachments" title="Attachments">${icon('paperclip', 12)}${attachments}</span>` : ''}
+                </span>
+                ${msg.intro ? `<span class="ee-message-preview">${this.escapeHtml(msg.intro)}</span>` : ''}
+            </button>
+        `;
+    }
+
+    // The bottom bar of the message list: where the page sits in the folder, the page arrows
+    // and the page size
+    _messageListFooter() {
+        const count = this.messages.length;
+        let range = '';
+        if (this.listPosition && count) {
+            const first = this.listPosition.page * this.pageSize + 1;
+            range = `${first}-${first + count - 1} of ${this.listPosition.total}`;
+        }
+        const hasPagination = this.nextPageCursor || this.prevPageCursor;
+        return `
+            <div class="ee-list-footer">
+                <span class="ee-list-range">${range}</span>
+                ${hasPagination ? this._iconButton('prev-page', 'back', 'Previous page', '', !this.prevPageCursor) + this._iconButton('next-page', 'next', 'Next page', '', !this.nextPageCursor) : ''}
+                <label class="ee-page-size-selector" title="Messages per page">
+                    <span class="ee-page-size-label">Per page</span>
+                    <select class="ee-button ee-page-size-select" data-action="page-size">
+                        ${[10, 20, 30, 50, 100].map(size => `<option value="${size}"${this.pageSize === size ? ' selected' : ''}>${size}</option>`).join('')}
+                    </select>
+                </label>
+            </div>
+        `;
     }
 
     renderMessageList() {
@@ -2756,61 +3024,18 @@ export class EmailEngineClient {
         }
 
         if (!this.messages.length) {
-            messageList.innerHTML = `${this._messageListHeader(this.currentFolder)}<div class="ee-empty-state">No messages</div>`;
+            messageList.innerHTML = `${this._messageListHeader(this.currentFolder)}<div class="ee-empty-state">No messages in this folder</div>`;
             return;
         }
 
-        const hasPagination = this.nextPageCursor || this.prevPageCursor;
-
-        // Both arrows stay in place once there is more than one page, the unavailable
-        // one disabled, so the controls do not shift under the pointer between pages
-        const controls = `
-                <div class="ee-pagination-controls">
-                    ${
-                        hasPagination
-                            ? `
-                        ${this._iconButton('prev-page', 'back', 'Previous page', '', !this.prevPageCursor)}
-                        ${this._iconButton('next-page', 'next', 'Next page', '', !this.nextPageCursor)}
-                    `
-                            : ''
-                    }
-                    <label class="ee-page-size-selector" title="Messages per page">
-                        <span class="ee-page-size-label">Show</span>
-                        <select class="ee-button ee-page-size-select" data-action="page-size">
-                            <option value="10" ${this.pageSize === 10 ? 'selected' : ''}>10</option>
-                            <option value="20" ${this.pageSize === 20 ? 'selected' : ''}>20</option>
-                            <option value="30" ${this.pageSize === 30 ? 'selected' : ''}>30</option>
-                            <option value="50" ${this.pageSize === 50 ? 'selected' : ''}>50</option>
-                            <option value="100" ${this.pageSize === 100 ? 'selected' : ''}>100</option>
-                        </select>
-                    </label>
-                </div>
-        `;
-
-        const html = `
-            ${this._messageListHeader(this.currentFolder, controls)}
+        const outgoing = this._isOutgoingFolder(this.currentFolder);
+        messageList.innerHTML = `
+            ${this._messageListHeader(this.currentFolder)}
             <div class="ee-message-items">
-                ${this.messages
-                    .map(
-                        msg => `
-                    <div class="ee-message-item ${msg.unseen ? 'unread' : ''} ${msg.id === (this.currentMessage && this.currentMessage.id) ? 'active' : ''}" data-id="${this.escapeHtml(msg.id)}">
-                        <div class="ee-message-header">
-                            <span class="ee-message-from">${this.escapeHtml(msg.from ? msg.from.name || msg.from.address : 'Unknown')}</span>
-                            <span class="ee-message-date">${this.formatDate(msg.date)}</span>
-                        </div>
-                        <div class="ee-message-subject">
-                            ${this._responseMarkers(msg)}
-                            <span class="ee-message-subject-text">${this.escapeHtml(msg.subject || '(no subject)')}</span>
-                            ${msg.attachments && msg.attachments.length > 0 ? `<span class="ee-attachment-indicator" title="Attachments">${icon('paperclip', 12)}${msg.attachments.length}</span>` : ''}
-                        </div>
-                        <div class="ee-message-preview">${this.escapeHtml(msg.intro || '')}</div>
-                    </div>
-                `
-                    )
-                    .join('')}
+                ${this.messages.map(msg => this._messageItemHtml(msg, outgoing)).join('')}
             </div>
+            ${this._messageListFooter()}
         `;
-        messageList.innerHTML = html;
 
         messageList.querySelectorAll('.ee-message-item').forEach(item => {
             item.addEventListener('click', () => {
@@ -2928,28 +3153,7 @@ export class EmailEngineClient {
                 </div>
                 ${this.renderOtpBox(msg.otp)}
                 <div class="ee-message-body"></div>
-                ${
-                    msg.attachments && msg.attachments.length > 0
-                        ? `
-                    <div class="ee-attachments">
-                        <div class="ee-attachments-title">Attachments (${msg.attachments.length})</div>
-                        ${msg.attachments
-                            .map(
-                                att => `
-                            <div class="ee-attachment-item" data-attachment-id="${this.escapeHtml(att.id)}">
-                                <div class="ee-attachment-icon">${icon('paperclip', 18)}</div>
-                                <div class="ee-attachment-info">
-                                    <div class="ee-attachment-name">${this.escapeHtml(att.filename || 'Unnamed attachment')}</div>
-                                    ${att.size ? `<div class="ee-attachment-size">${this.formatFileSize(att.size)}</div>` : ''}
-                                </div>
-                            </div>
-                        `
-                            )
-                            .join('')}
-                    </div>
-                `
-                        : ''
-                }
+                ${this._attachmentsHtml(listedAttachments(msg.attachments))}
             </div>
         `;
         viewer.innerHTML = html;
@@ -3060,6 +3264,34 @@ export class EmailEngineClient {
         // Message content scrolling is now handled in loadMessage method
     }
 
+    // The attachments of the open message as download cards: a type label, the name and the size
+    _attachmentsHtml(attachments) {
+        if (!attachments.length) {
+            return '';
+        }
+        const cards = attachments
+            .map(att => {
+                const name = att.filename || 'Unnamed attachment';
+                const size = attachmentSize(att);
+                return `
+                    <button type="button" class="ee-attachment-item" data-attachment-id="${this.escapeHtml(att.id)}" aria-label="Download ${this.escapeHtml(name)}" title="Download ${this.escapeHtml(name)}">
+                        <span class="ee-attachment-type">${this.escapeHtml(attachmentType(att))}</span>
+                        <span class="ee-attachment-info">
+                            <span class="ee-attachment-name">${this.escapeHtml(name)}</span>
+                            ${size ? `<span class="ee-attachment-size">${this.formatFileSize(size)}</span>` : ''}
+                        </span>
+                        <span class="ee-attachment-download">${icon('download', 16)}</span>
+                    </button>`;
+            })
+            .join('');
+        return `
+            <div class="ee-attachments">
+                <div class="ee-attachments-title">${attachments.length === 1 ? '1 attachment' : `${attachments.length} attachments`}</div>
+                <div class="ee-attachment-grid">${cards}</div>
+            </div>
+        `;
+    }
+
     // Replied / forwarded markers from the flags the server sets on the original once a reply or
     // forward has been delivered (IMAP accounts; Gmail API and MS Graph report neither flag).
     // labelled shows the words next to the icons, otherwise they are the accessible name only.
@@ -3112,6 +3344,12 @@ export class EmailEngineClient {
         }
 
         root.replaceChildren(style, content);
+        // A message that had no HTML of its own: EmailEngine's conversion sets a small fixed font,
+        // and the plain-text rule lets it read at the size of the rest of the client
+        const encodedSize = msg.text && msg.text.encodedSize;
+        if (encodedSize && encodedSize.plain && !encodedSize.html) {
+            content.dataset.plain = 'true';
+        }
         // A message that sets its own colours or backgrounds was designed for a light page;
         // in dark mode its dark text would land on a dark background, or the client's light
         // text on its white tables, so it is shown on a light surface instead (see the

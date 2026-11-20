@@ -42,4 +42,4 @@ service.
 ## Screenshots for design review
 
 `npm run screenshots` captures every screen at desktop, tablet and phone widths in light and dark
-mode into `test-results/screenshots/`. It is not part of the test run.
+mode into `screenshots/`. It is not part of the test run.

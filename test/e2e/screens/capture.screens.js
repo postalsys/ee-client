@@ -1,5 +1,5 @@
 // Captures every screen of the client for design review: desktop, tablet and phone widths, in
-// light and dark mode, into test-results/screenshots/. Run with `npm run screenshots`; it is not
+// light and dark mode, into screenshots/. Run with `npm run screenshots`; it is not
 // part of the test suite and asserts only that each screen got to the state it is named after.
 
 import { test, expect } from '../fixtures.js';
@@ -82,21 +82,21 @@ for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
                     await app.start({ darkMode: theme === 'dark' });
                     await setup(app, page);
                     await page.waitForTimeout(300);
-                    await page.screenshot({ path: `test-results/screenshots/${viewportName}-${theme}/${name}.png` });
+                    await page.screenshot({ path: `screenshots/${viewportName}-${theme}/${name}.png` });
                 });
             }
 
             test('14-error', async ({ app, page }) => {
                 await app.start({ apiUrl: 'http://127.0.0.1:9', darkMode: theme === 'dark' }, { waitForList: false });
                 await expect(page.locator('.ee-message-list .ee-error')).toBeVisible();
-                await page.screenshot({ path: `test-results/screenshots/${viewportName}-${theme}/14-error.png` });
+                await page.screenshot({ path: `screenshots/${viewportName}-${theme}/14-error.png` });
             });
 
             test('15-loading', async ({ app, page }) => {
                 await page.route('**/messages?**', () => {});
                 await app.start({ darkMode: theme === 'dark' }, { waitForList: false });
                 await expect(page.locator('.ee-message-list .ee-loading')).toBeVisible();
-                await page.screenshot({ path: `test-results/screenshots/${viewportName}-${theme}/15-loading.png` });
+                await page.screenshot({ path: `screenshots/${viewportName}-${theme}/15-loading.png` });
             });
         });
     }

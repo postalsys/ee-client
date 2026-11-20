@@ -20,6 +20,8 @@ test.describe('phone layout', () => {
         await app.openMessage('Unfinished proposal');
         await expect(client).toHaveAttribute('data-view', 'message');
         await expect(page.locator('.ee-message-list')).toBeHidden();
+        // the floating compose button would cover the message
+        await expect(page.locator('.ee-compose-button')).toBeHidden();
 
         await page.locator('.ee-message-viewer [data-action="back-to-list"]').click();
         await expect(client).toHaveAttribute('data-view', 'list');
