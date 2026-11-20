@@ -247,6 +247,7 @@ Clean up the instance and clear the `sess_` token keep-alive interval. Always ca
 - A forward attaches the original's files one by one as references (`prepareResponse()` returns them in `attachments`, and its reference has `forwardAttachments: false`).
 - The compose form is a docked panel without a backdrop (class `ee-compose`, formerly `ee-compose-modal`) and writes HTML through its editor; the message textarea is gone. Hosts that styled or scripted the old modal need updating.
 - The folder list is loaded with `counters=true` to show unread counts.
+- New: `updateDraft()` replaces a stored draft, and `editDraft()` opens one in the compose form.
 
 ## Browser UI
 
