@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.2](https://github.com/postalsys/ee-client/compare/v1.11.1...v1.11.2) (2026-11-20)
+
+
+### Bug Fixes
+
+* parse a recipient entry in linear time ([119214f](https://github.com/postalsys/ee-client/commit/119214f14cc4613d70229aa4d34c03b94e6c073c))
+
 ## [1.11.1](https://github.com/postalsys/ee-client/compare/v1.11.0...v1.11.1) (2026-11-19)
 
 
