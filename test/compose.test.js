@@ -242,6 +242,26 @@ describe('compose helpers', () => {
         host.destroy();
     });
 
+    it('reports a failed draft save once, as the save, without a folder load of its own', async () => {
+        const errors = [];
+        const host = new EmailEngineClient({ apiUrl: 'http://ee.test', account: 'acc', onError: (error, context) => errors.push(context.action) });
+        fetchMock.mock.mockImplementation(async () => ({ ok: false, status: 503, statusText: 'Unavailable', json: async () => ({ message: 'Not yet' }) }));
+        await assert.rejects(() => host.saveDraft({ subject: 'x' }));
+        assert.deepEqual(errors, ['saveDraft']);
+        host.destroy();
+    });
+
+    it('reports failed message actions from the API methods', async () => {
+        const errors = [];
+        const host = new EmailEngineClient({ apiUrl: 'http://ee.test', account: 'acc', onError: (error, context) => errors.push(context.action) });
+        fetchMock.mock.mockImplementation(async () => ({ ok: false, status: 500, statusText: 'Error', json: async () => ({}) }));
+        await assert.rejects(() => host.markAsRead('m1'));
+        await assert.rejects(() => host.deleteMessage('m1'));
+        await assert.rejects(() => host.moveMessage('m1', 'Archive'));
+        assert.deepEqual(errors, ['markAsRead', 'delete', 'move']);
+        host.destroy();
+    });
+
     it('is ready at once without the UI', async () => {
         assert.equal(await client.ready, true);
     });

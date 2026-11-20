@@ -221,7 +221,7 @@ export interface EmailEngineClientOptions {
 
 /** What `onError` is told about a failed request */
 export interface ErrorContext {
-    action: 'loadFolders' | 'loadMessages' | 'loadMessage' | 'send' | 'saveDraft' | 'download' | 'messageAction';
+    action: 'loadFolders' | 'loadMessages' | 'loadMessage' | 'markAsRead' | 'delete' | 'move' | 'send' | 'saveDraft' | 'download';
     /** The failure in words, e.g. "Failed to load the folders" */
     description: string;
 }
@@ -247,8 +247,9 @@ export declare class EmailEngineClient {
     listPosition: ListPosition | null;
     /**
      * Resolves once the first view (folders and a listing, or a deep-linked message) has loaded:
-     * true when it did, false when its requests failed and the panes show why. Resolves true at
-     * once for an API-only client.
+     * true when it did, false when its requests failed and the panes show why (a deep-linked
+     * message that could not be opened does not count, the inbox is listed instead). Resolves true
+     * at once for an API-only client, and false outside a browser.
      */
     ready: Promise<boolean>;
 

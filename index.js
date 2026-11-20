@@ -518,10 +518,10 @@ export class EmailEngineClient {
         this.initialMessage = typeof options.message === 'string' && options.message ? options.message : null;
         // Told whenever the open folder or message changes, so a host page can keep its address
         // bar in step (see _notifyNavigate)
-        this.onNavigate = typeof options.onNavigate === 'function' ? options.onNavigate : null;
-        // Outcomes a host may want to track (see _emit): a message queued for delivery, a draft
-        // stored, and a request that failed, with what the client was doing at the time
-        for (const name of ['onMessageSent', 'onDraftSaved', 'onError']) {
+        // Host callbacks (see _emit): navigation, so the host can keep its address bar in step, and
+        // the outcomes it may want to track - a message queued for delivery, a draft stored, and a
+        // request that failed, with what the client was doing at the time
+        for (const name of ['onNavigate', 'onMessageSent', 'onDraftSaved', 'onError']) {
             this[name] = typeof options[name] === 'function' ? options[name] : null;
         }
         const maxAttachmentSize = Number(options.maxAttachmentSize);
@@ -566,10 +566,7 @@ export class EmailEngineClient {
 
         // Resolves once the first view has loaded: true when it did, false when its requests failed
         // (the panes then show why). An API-only client has nothing to load.
-        this.ready = Promise.resolve(true);
-        if (this.container) {
-            this.ready = this.init() || this.ready;
-        }
+        this.ready = this.container ? this.init() : Promise.resolve(true);
 
         // Start keep-alive timer for sess_ tokens
         this._startKeepAliveTimer();
@@ -665,6 +662,14 @@ export class EmailEngineClient {
         return `${this._accountPath()}/attachment/${encodeURIComponent(attachmentId)}`;
     }
 
+    // Stores the folder list without rendering or reporting anything
+    async _fetchFolders(counters = false) {
+        const data = await this.apiRequest('GET', `${this._accountPath()}/mailboxes${counters ? '?counters=true' : ''}`);
+        this.folders = data.mailboxes || [];
+        this._folderTreeCache = null;
+        return this.folders;
+    }
+
     // counters adds each folder's message and unread counts, at the cost of a STATUS command per
     // folder on IMAP. The UI shows them, so it asks by default; an API-only client asks when told to.
     async loadFolders({ counters = !!this.container } = {}) {
@@ -673,9 +678,7 @@ export class EmailEngineClient {
         this._setPaneHtml('.ee-folder-tree', '<div class="ee-loading">Loading folders...</div>');
 
         try {
-            const data = await this.apiRequest('GET', `${this._accountPath()}/mailboxes${counters ? '?counters=true' : ''}`);
-            this.folders = data.mailboxes || [];
-            this._folderTreeCache = null;
+            await this._fetchFolders(counters);
             if (this.container) {
                 this.renderFolderList();
             }
@@ -832,6 +835,7 @@ export class EmailEngineClient {
             return true;
         } catch (error) {
             console.error('Failed to update message flags:', error);
+            this._reportError(error, 'markAsRead', 'Failed to update the message flags');
             throw error;
         }
     }
@@ -871,6 +875,7 @@ export class EmailEngineClient {
             return response || { deleted: true };
         } catch (error) {
             console.error('Failed to delete message:', error);
+            this._reportError(error, 'delete', 'Failed to delete the message');
             throw error;
         }
     }
@@ -886,6 +891,7 @@ export class EmailEngineClient {
             return true;
         } catch (error) {
             console.error('Failed to move message:', error);
+            this._reportError(error, 'move', 'Failed to move the message');
             throw error;
         }
     }
@@ -975,7 +981,8 @@ export class EmailEngineClient {
         assertMessageObject(message, 'saveDraft');
         try {
             if (!this.folders.length) {
-                await this.loadFolders();
+                // only the Drafts path is needed; a failure is this save's own
+                await this._fetchFolders();
             }
             const draftsFolder = this.folders.find(f => f.specialUse === '\\Drafts');
             if (!draftsFolder) {
@@ -1127,8 +1134,8 @@ export class EmailEngineClient {
     }
 
     // Tells the host a request failed: action names what the client was doing ('loadFolders',
-    // 'loadMessages', 'loadMessage', 'send', 'saveDraft', 'download' or 'messageAction'), and
-    // description says it in words
+    // 'loadMessages', 'loadMessage', 'markAsRead', 'delete', 'move', 'send', 'saveDraft' or
+    // 'download'), and description says it in words
     _reportError(error, action, description) {
         this._emit('onError', error, { action, description });
     }
@@ -1283,7 +1290,6 @@ export class EmailEngineClient {
     // nothing having happened. Say so instead.
     _alertActionFailed(error, fallback) {
         console.error(`${fallback}:`, error);
-        this._reportError(error, 'messageAction', fallback);
         return this.alertMethod(this._errorMessage(error, fallback), 'Error', null, 'OK');
     }
 
@@ -4752,7 +4758,7 @@ export class EmailEngineClient {
     init() {
         if (typeof document === 'undefined') {
             console.warn('EmailEngineClient UI features are only available in browser environments');
-            return;
+            return Promise.resolve(false);
         }
 
         this.createStyles();

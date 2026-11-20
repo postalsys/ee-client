@@ -51,5 +51,9 @@ test.describe('failed requests', () => {
         await app.viewerButton('move').selectOption('Archive');
         await expect.poll(async () => (await app.dialogs()).at(-1)).toMatchObject({ kind: 'alert', message: 'Move failed on the server' });
         await expect(app.listItem('Welcome aboard')).toHaveCount(1);
+        // reported to the host once, by the action itself
+        expect((await page.evaluate(() => window.__events)).filter(event => event.name === 'error')).toEqual([
+            { name: 'error', action: 'move', description: 'Failed to move the message', statusCode: 500 }
+        ]);
     });
 });
