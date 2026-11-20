@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `@postalsys/ee-client` is the EmailEngine client library for browser and Node.js
 applications. It wraps the EmailEngine REST API (`/v1/account/...`) and, when
 given a DOM `container`, also renders a complete, self-contained webmail UI
-(folder tree, paginated message list, message viewer, compose modal, dark mode).
+(folder tree, paginated message list, message viewer, compose panel, dark mode).
 
 It is published to npm as `@postalsys/ee-client` and is consumed both as a plain
 API client (Node.js) and as a drop-in UI widget (browser).
@@ -27,7 +27,8 @@ Almost all runtime code lives in a single file:
 - `api.md` - large reference dump of the EmailEngine HTTP API (documentation
   only, not shipped).
 - `README.md`, `LICENSE` - shipped with the package.
-- `test/` - `node:test` smoke tests (not shipped).
+- `test/` - `node:test` unit tests, and `test/e2e/` - the Playwright end-to-end suite
+  (neither shipped).
 
 The `files` whitelist in `package.json` (`index.js`, `index.d.ts`, `README.md`,
 `LICENSE`) is what actually gets published - `.npmignore` is secondary to it.
@@ -45,11 +46,16 @@ The `files` whitelist in `package.json` (`index.js`, `index.d.ts`, `README.md`,
    on `.details`, which `_errorMessage` / `_formatSendError` read back into a
    human message. The data methods - `loadFolders`, `loadMessages`,
    `loadMessage`, `markAsRead`, `deleteMessage`, `moveMessage`, `sendMessage`,
-   and attachment/source download - all go through them. Work in API-only mode
-   with no `container`.
+   `saveDraft`, `updateDraft` and attachment/source download - all go through
+   them. Work in API-only mode with no `container`. Since 2.0 `sendMessage`,
+   `saveDraft` and `updateDraft` take one message object (`assertMessageObject`
+   rejects the 1.x positional form).
 2. **UI rendering** - `createStyles`, `createLayout`, `renderFolderList`,
-   `renderMessageList`, `renderMessage`, and the compose modal build the webmail
-   interface by assembling HTML strings into `innerHTML`. Only active when a
+   `renderMessageList`, `renderMessage`, and the compose panel build the webmail
+   interface by assembling HTML strings into `innerHTML`. Compose is a panel
+   docked to the window's bottom right (`.ee-compose`, full screen under 700px)
+   with a contenteditable editor; `sanitizeEditorHtml` / `editorText` are the
+   editor's HTML filter and plain-text conversion. Only active when a
    `container` is supplied. Panes are written through `_setPaneHtml(selector,
 html)`, which guards the missing-container and post-`destroy()` cases;
    `_renderPaneError(selector, title, error, retry)` puts a failed request's
@@ -90,9 +96,11 @@ These come from EmailEngine, which ships as a `@yao-pkg/pkg` binary that snapsho
 ## Development Commands
 
 ```
-npm test                # node:test smoke tests (node --test test/*.test.js)
+npm test                # node:test unit tests (node --test test/*.test.js)
 npm run test:cjs        # only the static-copy check (see Platform constraints)
 npm run test:coverage   # the same under c8
+npm run test:e2e        # Playwright e2e suite (needs Docker; see test/e2e/README.md)
+npm run screenshots     # capture every screen for design review into screenshots/
 npm run lint            # eslint . (flat config in eslint.config.js)
 npm run lint:fix        # eslint . --fix
 npm run format          # prettier --write .
@@ -114,17 +122,24 @@ There is no build step - `index.js` ships as-authored.
 
 ## Testing
 
-- Tests use Node's built-in `node:test` runner and `node:assert/strict`, in
-  `test/*.test.js`. `test/smoke.test.js` covers only the API-only (no DOM) side:
-  exports, the factory guards, request building with `globalThis.fetch` mocked
-  through `mock.method`, error shaping, `escapeHtml` and the keep-alive timer.
-  The UI rendering half has no automated tests (it needs a DOM).
+- Unit tests use Node's built-in `node:test` runner and `node:assert/strict`, in
+  `test/*.test.js`. They cover the API-only (no DOM) side: exports, the factory
+  guards, request building with `globalThis.fetch` mocked through `mock.method`,
+  error shaping, `escapeHtml` and the keep-alive timer.
   `test/static-copy.test.js` checks the file as EmailEngine serves it (see
   Platform constraints).
+- The UI is covered by the Playwright suite in `test/e2e/` (`npm run test:e2e`):
+  Chromium against a real, unlicensed EmailEngine container (an unlicensed
+  instance keeps its workers for 20 minutes after boot) with one imapkit mail
+  server per test inside the test process. Sent mail lands in the same
+  mailbox's INBOX through imapkit's SMTP sink, so specs read back the MIME.
+  After every test the fixture fails it if script from the hostile seed mail
+  ran (`window.__xss`). Docker is required; no license or secrets are.
+  `npm test` stays Docker-free. Add or update e2e specs for UI changes.
 - Treat green `npm run lint`, `npm run format:check` and `npm test` as the bar
   before committing.
 - CI (`.github/workflows/test.yaml`) runs all three on Node 20, 22 and 24,
-  plus `npm run test:cjs` on 22 and 24.
+  plus `npm run test:cjs` on 22 and 24, and the e2e suite as its own job on 22.
 
 ## Release Process
 
@@ -169,7 +184,8 @@ those must run so the release workflow fires.
 ## CI / GitHub Actions
 
 - `test.yaml` - runs lint, format:check and `npm test` on Node 20, 22 and 24
-  (plus `npm run test:cjs` on 22 and 24) for pushes to `master` and PRs.
+  (plus `npm run test:cjs` on 22 and 24) for pushes to `master` and PRs, and the
+  `e2e` job (Playwright against EmailEngine in Docker) on Node 22.
 - `release.yaml` - release-please + npm publish on pushes to `master`.
 
 After pushing, check the runs (`gh run list --branch master`) and report their
@@ -187,8 +203,11 @@ at fault.
   The single intentional exception is the message's own HTML body
   (`msg.text.html`), which `_renderMessageBody()` inserts as-is into a shadow
   root on `.ee-message-body` so host CSS classes and ids cannot reach it; do not
-  add new raw-HTML sinks, and do not move the body back into the light DOM. When editing rendering code, confirm interpolated values
-  are escaped.
+  add new raw-HTML sinks, and do not move the body back into the light DOM. The
+  compose editor is the one other place HTML is written unescaped, and only the
+  output of `sanitizeEditorHtml()` (an allowlist rebuild, no attributes except
+  http(s)/mailto `href`) may go there: `editor.innerHTML` and `insertHTML`. When
+  editing rendering code, confirm interpolated values are escaped.
 - Formatting follows `.prettierrc` (4-space indent, single quotes, semicolons,
   160-column width, no trailing commas, `arrowParens: avoid`, `lf` line
   endings), the shared Postal Systems config. Run `npm run format` before

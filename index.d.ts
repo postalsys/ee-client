@@ -11,10 +11,13 @@ export interface MessageFlags {
 export interface MessageText {
     html?: string;
     plain?: string;
+    /** Sizes of the parts as stored; a message without `html` here had no HTML part of its own */
+    encodedSize?: { plain?: number; html?: number };
 }
 
 export interface MessageStatus {
     messages: number;
+    unseen?: number;
 }
 
 export interface Folder {
@@ -36,6 +39,11 @@ export interface Attachment {
     filename?: string;
     contentType?: string;
     size?: number;
+    /** Size of the attachment as encoded in the message (base64), as EmailEngine reports it */
+    encodedSize?: number;
+    /** An image the HTML body shows in place; not listed as an attachment */
+    embedded?: boolean;
+    inline?: boolean;
 }
 
 /** One-time passcode of a message, from its OTP-Token header (EmailEngine 2.87+, experimental) */
@@ -73,14 +81,34 @@ export interface MessageListResponse {
     prevPageCursor?: string;
 }
 
+/** Where the listed page sits in its folder, when the server reports it */
+export interface ListPosition {
+    /** 0-based page number */
+    page: number;
+    /** Messages in the folder */
+    total: number;
+}
+
 export type SendRecipient = string | EmailAddress;
 
-/** A file to attach, as the compose form reads it */
+/** A file to attach: new content, base64 encoded */
 export interface ComposeAttachment {
     filename: string;
     contentType?: string;
     /** Base64 encoded file content */
     content: string;
+}
+
+/**
+ * An attachment of a stored message, attached by its EmailEngine attachment ID. The server
+ * fetches the content itself; filename and contentType are kept on the new message.
+ */
+export interface ReferencedAttachment {
+    reference: string;
+    filename?: string;
+    contentType?: string;
+    /** Size in bytes, for display only; not sent */
+    size?: number;
 }
 
 /** EmailEngine's submit reference block: what the message replies to or forwards */
@@ -89,16 +117,25 @@ export interface MessageReference {
     action: 'reply' | 'reply-all' | 'forward';
     /** Quote the referenced message under the new text */
     inline?: boolean;
-    /** Carry the referenced message's attachments over (forward only) */
+    /** Carry all of the referenced message's attachments over (forward only) */
     forwardAttachments?: boolean;
 }
 
-/** Optional fields for `sendMessage()` and `saveDraft()` */
-export interface ComposeOptions {
-    cc?: SendRecipient | SendRecipient[];
-    bcc?: SendRecipient | SendRecipient[];
-    attachments?: ComposeAttachment[];
+/** The message `sendMessage()`, `saveDraft()` and `updateDraft()` take */
+export interface OutgoingMessage {
+    to?: SendRecipient | SendRecipient[] | null;
+    cc?: SendRecipient | SendRecipient[] | null;
+    bcc?: SendRecipient | SendRecipient[] | null;
+    subject?: string;
+    /** The plain text part */
+    text?: string;
+    /** The HTML part */
+    html?: string;
+    attachments?: Array<ComposeAttachment | ReferencedAttachment>;
+    /** What the message replies to or forwards; the server adds the threading headers and the quote */
     reference?: MessageReference | null;
+    /** Extra headers, e.g. the In-Reply-To and References of a reopened draft */
+    headers?: Record<string, string>;
 }
 
 /** Recipients, subject and reference of a reply, reply-all or forward, from `prepareResponse()` */
@@ -107,6 +144,8 @@ export interface PreparedResponse {
     cc: EmailAddress[];
     subject: string;
     reference: MessageReference;
+    /** A forward's files: the original's attachments as references, one per file */
+    attachments?: ReferencedAttachment[];
 }
 
 /** Prefill for `compose()`. Address fields take a typed string or address entries */
@@ -116,6 +155,8 @@ export interface ComposePrefill {
     bcc?: string | EmailAddress[];
     subject?: string;
     text?: string;
+    /** Rich text for the editor; filtered to paragraphs, emphasis, lists, quotes and http(s)/mailto links */
+    html?: string;
 }
 
 /** What `onNavigate` is told whenever the open folder or message changes */
@@ -190,6 +231,7 @@ export declare class EmailEngineClient {
     messages: Message[];
     nextPageCursor: string | null;
     prevPageCursor: string | null;
+    listPosition: ListPosition | null;
 
     constructor(options?: EmailEngineClientOptions);
 
@@ -206,20 +248,30 @@ export declare class EmailEngineClient {
     moveMessage(messageId: string, targetPath: string): Promise<boolean>;
     /** Opens a message by ID and lists the folder that holds it */
     openMessage(messageId: string): Promise<Message | null>;
-    sendMessage(to: SendRecipient | SendRecipient[], subject: string, text: string, options?: ComposeOptions): Promise<any>;
-    saveDraft(to?: SendRecipient | SendRecipient[] | null, subject?: string, text?: string, options?: ComposeOptions): Promise<any>;
+    /** Submits a message for delivery. Since 2.0 it takes one message object */
+    sendMessage(message: OutgoingMessage): Promise<any>;
+    /** Stores a message in the Drafts folder */
+    saveDraft(message: OutgoingMessage): Promise<any>;
+    /** Replaces a stored draft: saves the new version, then removes the old one for good */
+    updateDraft(messageId: string, message: OutgoingMessage): Promise<any>;
     /** Parses a typed address field ("Name <a@example.com>, b@example.com") into address entries */
     parseAddressList(value: string | null | undefined): EmailAddress[];
     /** Formats address entries for an address field; the reverse of parseAddressList() */
     formatAddressList(list: EmailAddress | EmailAddress[] | null | undefined): string;
     /** Recipients, subject and reference for answering msg; ownAddress is left out of the recipients */
     prepareResponse(msg: Message, action: 'reply' | 'reply-all' | 'forward', ownAddress?: string | null): PreparedResponse;
-    /** Opens the compose form, optionally prefilled (needs the UI) */
-    compose(prefill?: ComposePrefill): void;
-    /** Opens the compose form as a reply to a message, the open one by default (needs the UI) */
-    reply(messageId?: string | null, options?: { all?: boolean }): Promise<void>;
-    /** Opens the compose form to forward a message, the open one by default (needs the UI) */
-    forward(messageId?: string | null): Promise<void>;
+    /**
+     * Opens the compose form, optionally prefilled. Like reply(), forward() and editDraft() it
+     * needs the UI, and resolves false when an unsaved message stayed open instead (the user chose
+     * to save it as a draft and saving failed), true otherwise.
+     */
+    compose(prefill?: ComposePrefill): Promise<boolean>;
+    /** Opens the compose form as a reply to a message, the open one by default */
+    reply(messageId?: string | null, options?: { all?: boolean }): Promise<boolean>;
+    /** Opens the compose form to forward a message, the open one by default */
+    forward(messageId?: string | null): Promise<boolean>;
+    /** Opens a stored draft in the compose form, the open message by default */
+    editDraft(messageId?: string | null): Promise<boolean>;
     submitDraft(messageId: string, options?: SubmitDraftOptions | null): Promise<any>;
     downloadAttachment(attachmentId: string, suggestedFilename?: string): Promise<void>;
     downloadOriginalMessage(messageId: string, subject?: string): Promise<void>;

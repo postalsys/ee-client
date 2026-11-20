@@ -46,7 +46,7 @@ test.describe('folders', () => {
 
     test('renders a hostile folder name as text', async ({ app }) => {
         await app.start();
-        await expect(app.folder(XSS.folder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).toBeVisible();
-        await app.folder(XSS.folder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).hover();
+        await expect(app.folder(XSS.folder)).toBeVisible();
+        await app.folder(XSS.folder).hover();
     });
 });

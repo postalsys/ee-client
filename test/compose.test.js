@@ -1,7 +1,7 @@
 // The DOM-free half of composing: address fields, the recipients and subject of a reply,
 // reply-all or forward, the request bodies sendMessage and saveDraft build, the response markers
-// and the onNavigate notification. The compose form itself needs a DOM and is exercised by
-// EmailEngine's own end-to-end suite.
+// and the onNavigate notification. The compose form itself needs a DOM and is exercised by the
+// end-to-end suite in test/e2e.
 
 import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
@@ -114,20 +114,37 @@ describe('compose helpers', () => {
         assert.deepEqual(client.prepareResponse(toSelf, 'reply', OWN).to, [{ name: 'Me', address: OWN }]);
     });
 
-    it('starts a forward with no recipients', () => {
-        const forward = client.prepareResponse(original, 'forward', OWN);
+    it('starts a forward with no recipients and the original files as references', () => {
+        const withFiles = {
+            ...original,
+            attachments: [
+                { id: 'att1', filename: 'a.pdf', contentType: 'application/pdf', encodedSize: 400 },
+                { id: 'att2', filename: 'logo.png', contentType: 'image/png', embedded: true }
+            ]
+        };
+        const forward = client.prepareResponse(withFiles, 'forward', OWN);
         assert.deepEqual(forward.to, []);
         assert.equal(forward.subject, 'Fwd: Quarterly numbers');
-        assert.deepEqual(forward.reference, { message: 'AAAAAQAACnA', action: 'forward', inline: true });
+        assert.deepEqual(forward.reference, { message: 'AAAAAQAACnA', action: 'forward', inline: true, forwardAttachments: false });
+        // an image the body shows in place travels with the quote, not as a file
+        assert.deepEqual(forward.attachments, [{ reference: 'att1', filename: 'a.pdf', contentType: 'application/pdf', size: 300 }]);
         assert.equal(client.prepareResponse({ ...original, subject: 'Fw: x' }, 'forward').subject, 'Fw: x');
     });
 
-    it('sends cc, bcc, attachments and the reference, leaving empty lists out', async () => {
-        await client.sendMessage('a@example.com', 'Subject', 'Body', {
+    it('sends html, cc, bcc, attachments and the reference, leaving empty lists out', async () => {
+        await client.sendMessage({
+            to: 'a@example.com',
+            subject: 'Subject',
+            text: 'Body',
+            html: '<p>Body</p>',
             cc: [],
             bcc: ['b@example.com'],
-            attachments: [{ filename: 'a.txt', contentType: 'text/plain', content: 'YQ==', size: 1 }],
-            reference: { message: 'm1', action: 'reply', inline: true }
+            attachments: [
+                { filename: 'a.txt', contentType: 'text/plain', content: 'YQ==', size: 1 },
+                { reference: 'att1', filename: 'a.pdf', contentType: 'application/pdf', size: 300 }
+            ],
+            reference: { message: 'm1', action: 'reply', inline: true },
+            headers: { 'In-Reply-To': '<x@example.com>' }
         });
 
         const [url, options] = fetchMock.mock.calls[0].arguments;
@@ -135,28 +152,31 @@ describe('compose helpers', () => {
         assert.deepEqual(JSON.parse(options.body), {
             subject: 'Subject',
             text: 'Body',
+            html: '<p>Body</p>',
             to: [{ address: 'a@example.com' }],
             bcc: [{ address: 'b@example.com' }],
-            // the size is the form's own bookkeeping and is not sent
-            attachments: [{ filename: 'a.txt', contentType: 'text/plain', content: 'YQ==' }],
-            reference: { message: 'm1', action: 'reply', inline: true }
+            // the size is the form's own bookkeeping and is not sent; a reference keeps its name
+            attachments: [
+                { filename: 'a.txt', contentType: 'text/plain', content: 'YQ==' },
+                { reference: 'att1', filename: 'a.pdf', contentType: 'application/pdf' }
+            ],
+            reference: { message: 'm1', action: 'reply', inline: true },
+            headers: { 'In-Reply-To': '<x@example.com>' }
         });
     });
 
-    it('keeps the three-argument sendMessage call working', async () => {
-        await client.sendMessage(['a@example.com', { name: 'B', address: 'b@example.com' }], 'S', 'T');
-        assert.deepEqual(JSON.parse(fetchMock.mock.calls[0].arguments[1].body), {
-            subject: 'S',
-            text: 'T',
-            to: [{ address: 'a@example.com' }, { name: 'B', address: 'b@example.com' }]
-        });
+    it('refuses the 1.x (to, subject, text) call instead of sending a blank message', async () => {
+        await assert.rejects(() => client.sendMessage('a@example.com', 'S', 'T'), TypeError);
+        await assert.rejects(() => client.saveDraft(null, 'S', 'T'), /saveDraft\(\) takes a message object/);
+        await assert.rejects(() => client.updateDraft('d1', ['a@example.com']), TypeError);
+        assert.equal(fetchMock.mock.callCount(), 0);
     });
 
     it('saves a draft with its reference into the Drafts folder', async () => {
         client.folders = [{ path: 'Drafts', specialUse: '\\Drafts' }];
         fetchMock.mock.mockImplementation(async url => jsonResponse(url.endsWith('/acc') ? { email: OWN, name: 'Me' } : { path: 'Drafts' }));
 
-        await client.saveDraft(null, 'Re: x', 'Later', { reference: { message: 'm1', action: 'reply', inline: true } });
+        await client.saveDraft({ subject: 'Re: x', text: 'Later', reference: { message: 'm1', action: 'reply', inline: true } });
 
         const upload = fetchMock.mock.calls.find(call => call.arguments[0].endsWith('/message'));
         assert.deepEqual(JSON.parse(upload.arguments[1].body), {
@@ -167,6 +187,29 @@ describe('compose helpers', () => {
             reference: { message: 'm1', action: 'reply', inline: true },
             from: { name: 'Me', address: OWN }
         });
+    });
+
+    it('replaces a draft: the new version is saved before the old one is removed for good', async () => {
+        client.folders = [{ path: 'Drafts', specialUse: '\\Drafts' }];
+        fetchMock.mock.mockImplementation(async url => jsonResponse(url.endsWith('/acc') ? { email: OWN } : { id: 'new', path: 'Drafts' }));
+
+        const saved = await client.updateDraft('old/1', { to: 'a@example.com', subject: 'v2', text: 'Second version' });
+        assert.deepEqual(saved, { id: 'new', path: 'Drafts' });
+
+        const calls = fetchMock.mock.calls.map(call => `${(call.arguments[1] && call.arguments[1].method) || 'GET'} ${call.arguments[0]}`);
+        const upload = calls.indexOf('POST http://ee.test/v1/account/acc/message');
+        const removal = calls.indexOf('DELETE http://ee.test/v1/account/acc/message/old%2F1?force=true');
+        assert.ok(upload >= 0 && removal > upload, calls.join('\n'));
+    });
+
+    it('keeps the new draft when the old one cannot be removed', async () => {
+        client.folders = [{ path: 'Drafts', specialUse: '\\Drafts' }];
+        fetchMock.mock.mockImplementation(async (url, options) =>
+            options && options.method === 'DELETE'
+                ? { ok: false, status: 500, statusText: 'Server Error', json: async () => ({ message: 'boom' }) }
+                : jsonResponse({ id: 'new', path: 'Drafts' })
+        );
+        assert.deepEqual(await client.updateDraft('old', { subject: 'v2' }), { id: 'new', path: 'Drafts' });
     });
 
     it('marks replied and forwarded messages, a forward only as forwarded', () => {

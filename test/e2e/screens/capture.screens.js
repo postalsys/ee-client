@@ -81,22 +81,21 @@ for (const [viewportName, viewport] of Object.entries(VIEWPORTS)) {
                 test(name, async ({ app, page }) => {
                     await app.start({ darkMode: theme === 'dark' });
                     await setup(app, page);
-                    await page.waitForTimeout(300);
-                    await page.screenshot({ path: `screenshots/${viewportName}-${theme}/${name}.png` });
+                    await page.screenshot({ animations: 'disabled', path: `screenshots/${viewportName}-${theme}/${name}.png` });
                 });
             }
 
             test('14-error', async ({ app, page }) => {
                 await app.start({ apiUrl: 'http://127.0.0.1:9', darkMode: theme === 'dark' }, { waitForList: false });
                 await expect(page.locator('.ee-message-list .ee-error')).toBeVisible();
-                await page.screenshot({ path: `screenshots/${viewportName}-${theme}/14-error.png` });
+                await page.screenshot({ animations: 'disabled', path: `screenshots/${viewportName}-${theme}/14-error.png` });
             });
 
             test('15-loading', async ({ app, page }) => {
                 await page.route('**/messages?**', () => {});
                 await app.start({ darkMode: theme === 'dark' }, { waitForList: false });
                 await expect(page.locator('.ee-message-list .ee-loading')).toBeVisible();
-                await page.screenshot({ path: `screenshots/${viewportName}-${theme}/15-loading.png` });
+                await page.screenshot({ animations: 'disabled', path: `screenshots/${viewportName}-${theme}/15-loading.png` });
             });
         });
     }

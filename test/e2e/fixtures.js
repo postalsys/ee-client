@@ -9,6 +9,7 @@
 import { test as base, expect } from '@playwright/test';
 import { Mailbox } from './mailbox.js';
 import { NOW } from './seed.js';
+import { escapeRegExp } from './mime.js';
 
 class App {
     constructor(page, mailbox) {
@@ -44,7 +45,7 @@ class App {
     }
 
     folder(name) {
-        return this.page.locator('.ee-folder-item', { has: this.page.locator('.ee-folder-name', { hasText: new RegExp(`^${name}$`) }) });
+        return this.page.locator('.ee-folder-item', { has: this.page.locator('.ee-folder-name', { hasText: new RegExp(`^${escapeRegExp(name)}$`) }) });
     }
 
     async openFolder(name) {

@@ -77,8 +77,8 @@ const { messages, nextPageCursor } = await client.loadMessages('INBOX');
 // Load a single message (its HTML is returned pre-processed for safe display)
 const message = await client.loadMessage(messages[0].id);
 
-// Send a plain-text message
-await client.sendMessage('user@example.com', 'Hello', 'Sent from ee-client');
+// Send a message
+await client.sendMessage({ to: 'user@example.com', subject: 'Hello', text: 'Sent from ee-client' });
 
 // Release the keep-alive timer when done (see destroy() below)
 client.destroy();
@@ -181,37 +181,40 @@ Move a message to another folder.
 
 Open a message by its ID and list the folder that holds it, the way the `message` option does on startup. A message that cannot be loaded shows its error in the viewer and the inbox is listed instead.
 
-### `sendMessage(to, subject, text, options?): Promise<object>`
+### `sendMessage(message): Promise<object>`
 
-Send a plain-text email. Submitting queues the message; EmailEngine delivers it afterwards. `to` may be:
+Send an email. Submitting queues the message; EmailEngine delivers it afterwards. `message` is an object:
 
-- a string address: `'user@example.com'`
-- an object: `{ name: 'John Doe', address: 'john@example.com' }`
-- an array of strings and/or objects for multiple recipients
-
-The optional `options` object takes:
-
-- `cc`, `bcc`: recipients, in the same forms as `to`
-- `attachments`: `[{ filename, contentType, content }]` with `content` base64 encoded
-- `reference`: EmailEngine's submit reference block, `{ message, action, inline, forwardAttachments }`. With it EmailEngine sets the threading headers, quotes the referenced message when `inline` is true, carries its attachments over on a forward with `forwardAttachments`, and flags the original `\Answered` / `$Forwarded` once the message is delivered (IMAP accounts)
+- `to`, `cc`, `bcc`: recipients, each a string address (`'user@example.com'`), an object (`{ name: 'John Doe', address: 'john@example.com' }`) or an array of either
+- `subject`
+- `text`: the plain text part, and `html`: the HTML part (either or both)
+- `attachments`: new files as `{ filename, contentType, content }` with `content` base64 encoded, or attachments of a stored message as `{ reference, filename, contentType }`, where `reference` is the EmailEngine attachment ID. The server fetches a referenced file itself, so forwarding a large file does not pass it through the browser
+- `reference`: EmailEngine's submit reference block, `{ message, action, inline, forwardAttachments }`. With it EmailEngine sets the threading headers, quotes the referenced message when `inline` is true, carries all of its attachments over on a forward with `forwardAttachments`, and flags the original `\Answered` / `$Forwarded` once the message is delivered (IMAP accounts)
+- `headers`: extra headers, for example the `In-Reply-To` and `References` of a reopened draft
 
 Resolves to EmailEngine's submit response.
 
-### `reply(messageId?, { all }?)`, `forward(messageId?)`, `compose(prefill?)`
+### `reply(messageId?, { all }?)`, `forward(messageId?)`, `compose(prefill?)`, `editDraft(messageId?)`
 
-Open the compose form (UI only). `reply()` and `forward()` act on the open message when no ID is given and fill in the recipients, the `Re:` / `Fwd:` subject and the reference; the original is shown under the text box and quoted by EmailEngine when the message is sent. `reply(id, { all: true })` resolves reply-all in the client: the original sender goes in To and the other recipients in Cc, without the account's own address, and the message goes out exactly as the form shows it. `compose()` opens a blank form and takes `{ to, cc, bcc, subject, text }` to prefill it.
+Open the compose form (UI only). `reply()` and `forward()` act on the open message when no ID is given and fill in the recipients, the `Re:` / `Fwd:` subject and the reference; the original is shown under the editor and quoted by EmailEngine when the message is sent. `reply(id, { all: true })` resolves reply-all in the client: the original sender goes in To and the other recipients in Cc, without the account's own address, and the message goes out exactly as the form shows it. A forward lists the original's files as attachments, each of which can be removed. `compose()` opens a blank form and takes `{ to, cc, bcc, subject, text, html }` to prefill it. `editDraft()` opens a stored draft; saving replaces it and sending removes it from Drafts.
+
+When the form already holds unsaved changes, these first ask whether to save them as a draft. They resolve `false` if saving that draft failed and the form stayed as it was, `true` otherwise.
 
 ### `prepareResponse(msg, action, ownAddress?): object`
 
-The recipients, subject and reference of a `'reply'`, `'reply-all'` or `'forward'` of a message, as `reply()` and `forward()` prefill them: `{ to, cc, subject, reference }`. A reply goes to the message's Reply-To, otherwise its sender, or to its recipients when the account sent it. Useful for building a compose UI of your own.
+The recipients, subject and reference of a `'reply'`, `'reply-all'` or `'forward'` of a message, as `reply()` and `forward()` prefill them: `{ to, cc, subject, reference }`, plus `attachments` for a forward (the original's files as `{ reference, filename, contentType, size }`). A reply goes to the message's Reply-To, otherwise its sender, or to its recipients when the account sent it. Useful for building a compose UI of your own.
 
 ### `parseAddressList(value)` / `formatAddressList(list)`
 
 Convert between a typed address field (`"Doe, John" <john@example.com>, jane@example.com`) and address entries.
 
-### `saveDraft(to?, subject?, text?, options?): Promise<object>`
+### `saveDraft(message): Promise<object>`
 
-Store a plain-text message as a draft instead of sending it (`POST /v1/account/{account}/message`). The message is uploaded to the account's Drafts special-use folder with the `\Draft` flag set and the account's own name and address as the sender, so it can later be delivered with `submitDraft()`. `to` and `options` accept the same values as in `sendMessage()`, and `to` may be omitted for a draft without recipients. A draft saved with a `reference` keeps the threading headers and the quote. Resolves to EmailEngine's upload response (`{ id, path, uid, ... }`).
+Store a message as a draft instead of sending it (`POST /v1/account/{account}/message`). It takes the same message object as `sendMessage()`, and every field may be left out. The message is uploaded to the account's Drafts special-use folder with the `\Draft` flag set and the account's own name and address as the sender, so it can later be delivered with `submitDraft()`. A draft saved with a `reference` keeps the threading headers and the quote. Resolves to EmailEngine's upload response (`{ id, path, uid, ... }`).
+
+### `updateDraft(messageId, message): Promise<object>`
+
+Replace a stored draft with a new version. IMAP cannot change a stored message, so the new version is saved first and the old draft removed for good afterwards; attachments the new version references from the old draft are copied before it goes. If the old draft cannot be removed, the new one is kept and the failure only logged. Resolves to the upload response of the new version.
 
 ### `submitDraft(messageId: string, options?: SubmitDraftOptions): Promise<object>`
 
@@ -235,17 +238,28 @@ Set dark mode from the host application without touching the preference stored b
 
 Clean up the instance and clear the `sess_` token keep-alive interval. Always call this when you are finished with a client (for example when unmounting the UI) to avoid a leaked timer.
 
+## Upgrading from 1.x
+
+2.0 changes how messages are sent and how compose behaves:
+
+- `sendMessage()` and `saveDraft()` take one message object. `sendMessage(to, subject, text, { cc })` becomes `sendMessage({ to, subject, text, cc })`; `saveDraft(to, subject, text, options)` becomes `saveDraft({ to, subject, text, ...options })`. The old form throws a `TypeError` instead of sending a message without its subject and text.
+- `compose()` returns a promise, like `reply()` and `forward()`.
+- A forward attaches the original's files one by one as references (`prepareResponse()` returns them in `attachments`, and its reference has `forwardAttachments: false`).
+- The compose form is a docked panel without a backdrop (class `ee-compose`, formerly `ee-compose-modal`) and writes HTML through its editor; the message textarea is gone. Hosts that styled or scripted the old modal need updating.
+- The folder list is loaded with `counters=true` to show unread counts.
+
 ## Browser UI
 
 When a `container` is provided the client builds a full webmail interface:
 
-- Folder tree with special-folder ordering (Inbox, Drafts, Sent, Trash, Junk, Archive) and nested folders
-- Paginated message list with a selectable page size (persisted to `localStorage`)
+- Folder tree with special-folder ordering (Inbox, Drafts, Sent, Trash, Junk, Archive), icons, unread counts and nested folders. The folder list is requested with `counters=true`, which costs one IMAP STATUS command per folder
+- Paginated message list with its position ("1-20 of 45") and a selectable page size (persisted to `localStorage`) in a footer. Unread messages are marked with a dot and bold text; Drafts and Sent list the recipients instead of the sender
 - Message viewer with reply, reply all, forward, mark read/unread, delete, move-to-folder, download original, and attachment downloads
 - Replied and forwarded markers in the list and the viewer, from the `\Answered` and `$Forwarded` flags (IMAP accounts)
-- Draft messages show a "Send Draft" button that submits the stored draft for delivery after confirmation (requires EmailEngine v2.76.0 or later; editing the draft first is not supported)
+- Draft messages open with an "Edit" button that continues the draft in the compose form, and a "Send draft" button that submits it as it is (requires EmailEngine v2.76.0 or later)
 - Quoted thread history collapsed behind a "Show quoted text" control
-- Compose form for sending plain-text mail: To, Cc and Bcc fields that take several addresses, file attachments, and a Save Draft option that stores the message in the Drafts folder instead of sending it. Replies and forwards show the original under the text box and can include the original attachments
+- Compose form docked to the bottom right of the window (full screen on a phone), so the message being answered stays readable. It has a minimal rich text editor (bold, italic, lists, links), To, Cc and Bcc fields that take several addresses, file attachments, and Save draft. A reply's quote is folded behind a "..." control; a forward shows the forwarded message with its header and lists the original's files as attachments that can be removed one by one. Closing a form with unsaved changes asks whether to save them as a draft
+- Folders, messages and attachments are buttons, reachable and usable from the keyboard
 - Dark mode toggle with the preference persisted to `localStorage`
 - Failed requests replace the affected pane's placeholder with an error panel and a Retry button
 
@@ -263,7 +277,9 @@ When opening a message the client scrolls the page only if its top is scrolled o
 
 ### Compose and notices
 
-On wide layouts the Compose button sits at the top of the folder pane; in the one-pane layout it is a floating button. Problems with a message (no recipient, an address that is not one, a send the server refused) are shown inside the compose form next to its buttons, and the form keeps what was typed. Outcomes that need no answer ("Message queued for delivery.", "Draft saved to the Drafts folder.", "Message moved to Trash.") appear as a short notice at the bottom of the client, which `notify(message)` can show from the host too. `alertMethod` is used for failures outside the form.
+On wide layouts the Compose button sits at the top of the folder pane; in the one-pane layout it is a floating button. Problems with a message (no recipient, an address that is not one, a send the server refused) are shown inside the compose form next to its buttons, and the form keeps what was typed. Outcomes that need no answer ("Message queued for delivery.", "Draft saved.", "Message moved to Trash.") appear as a short notice at the bottom of the client, which `notify(message)` can show from the host too. `alertMethod` is used for failures outside the form.
+
+The editor keeps paragraphs, bold, italic, underline, lists, quotes and `http`, `https` and `mailto` links. Pasted content and reopened drafts are filtered down to those; anything else keeps only its text. A reopened draft of a reply keeps its quote as editable text. When the message being answered or forwarded has no HTML part of its own, the client adds the quote to the HTML part itself, since EmailEngine quotes only the original's HTML into it.
 
 ### Dark mode and styled messages
 
@@ -314,7 +330,8 @@ The client uses contextual titles such as `Delete Message`, `Validation Error`, 
 This library renders attacker-controlled email content, so it is careful about HTML injection:
 
 - All untrusted values (subjects, addresses, names, filenames, folder names) are HTML-escaped before being written to the DOM.
-- The one intentional raw-HTML sink is the message body itself. The client fetches it with EmailEngine's `webSafeHtml` option so the HTML arrives already pre-processed for safe embedding.
+- The one intentional raw-HTML sink is the message body itself. The client fetches it with EmailEngine's `webSafeHtml` option so the HTML arrives already pre-processed for safe embedding, and renders it inside a shadow root so host styles and ids cannot reach it.
+- HTML that enters the compose editor (pasted content, a reopened draft, `compose({ html })`) is parsed in an inert document and rebuilt from an allowlist of tags with no attributes except `http`, `https` and `mailto` link targets. The same filter runs on the HTML that is sent.
 
 Do not disable escaping or add new raw-HTML sinks when extending the UI.
 

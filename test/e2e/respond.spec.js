@@ -1,10 +1,6 @@
 import { test, expect } from './fixtures.js';
 import { waitFor } from './mailbox.js';
-
-const headerOf = (source, name) => {
-    const match = source.match(new RegExp(`^${name}: ((?:.*)(?:\\r\\n[ \\t].*)*)`, 'mi'));
-    return match ? match[1].replace(/\r\n[ \t]+/g, ' ') : null;
-};
+import { decodePart, headerOf } from './mime.js';
 
 test.describe('reply and forward', () => {
     test('replies to the Reply-To address with threading headers', async ({ app, mailbox, page }) => {
@@ -15,7 +11,7 @@ test.describe('reply and forward', () => {
         await expect(dialog.locator('.ee-compose-title')).toHaveText('Reply');
         await expect(dialog.locator('[name="to"]')).toHaveValue('Finance Team <finance@example.com>');
         await expect(dialog.locator('[name="subject"]')).toHaveValue('Re: Quarterly report');
-        await dialog.locator('[name="message"]').fill('Thanks, looks good.');
+        await dialog.locator('.ee-compose-editor').fill('Thanks, looks good.');
         await dialog.locator('.ee-compose-send').click();
         await expect(page.locator('.ee-toast')).toHaveText('Message queued for delivery.');
 
@@ -48,13 +44,65 @@ test.describe('reply and forward', () => {
         await app.viewerButton('forward').click();
         const dialog = app.compose;
         await expect(dialog.locator('[name="subject"]')).toHaveValue('Fwd: Quarterly report');
+        await expect(dialog.locator('.ee-compose-chip-name')).toHaveText(['q3-report.pdf', 'figures.csv']);
         await dialog.locator('[name="to"]').fill('dave@example.com');
         await dialog.locator('.ee-compose-send').click();
         await expect(page.locator('.ee-toast')).toHaveText('Message queued for delivery.');
 
         const fwd = await mailbox.waitForMessage('INBOX', 'Subject: Fwd: Quarterly report');
-        expect(fwd.source).toContain('q3-report.pdf');
-        expect(fwd.source).toContain('figures.csv');
+        expect(fwd.source).toContain('filename=q3-report.pdf');
+        expect(fwd.source).toContain('Content-Type: application/pdf');
+        expect(fwd.source).toContain('filename=figures.csv');
         expect(fwd.source).toContain('Begin forwarded message');
+    });
+
+    test('shows the forwarded message with its header and drops a removed file', async ({ app, mailbox, page }) => {
+        await app.start();
+        await app.openMessage('Quarterly report');
+        await app.viewerButton('forward').click();
+        const dialog = app.compose;
+        const header = dialog.locator('.ee-compose-quote-header');
+        await expect(header.locator('.ee-forward-title')).toHaveText('Forwarded message');
+        await expect(header).toContainText('Alice Andersson');
+        await expect(header).toContainText('Quarterly report');
+        await expect(dialog.locator('.ee-compose-quote-toggle')).toHaveAttribute('aria-expanded', 'true');
+
+        await dialog.locator('.ee-compose-chip', { hasText: 'q3-report.pdf' }).locator('.ee-compose-chip-remove').click();
+        await expect(dialog.locator('.ee-compose-chip-name')).toHaveText(['figures.csv']);
+        await dialog.locator('[name="to"]').fill('dave@example.com');
+        await dialog.locator('.ee-compose-editor').fill('FYI, the figures only.');
+        await dialog.locator('.ee-compose-send').click();
+        await expect(page.locator('.ee-toast')).toHaveText('Message queued for delivery.');
+
+        const fwd = await mailbox.waitForMessage('INBOX', 'Subject: Fwd: Quarterly report');
+        expect(fwd.source).not.toContain('q3-report.pdf');
+        expect(fwd.source).toContain('filename=figures.csv');
+        expect(fwd.source).toContain('FYI, the figures only.');
+    });
+
+    test('folds the quote of a reply until asked', async ({ app }) => {
+        await app.start();
+        await app.openMessage('Quarterly report');
+        await app.viewerButton('reply').click();
+        const toggle = app.compose.locator('.ee-compose-quote-toggle');
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        await expect(app.compose.locator('.ee-compose-quote-content')).toBeHidden();
+        await toggle.click();
+        await expect(app.compose.locator('.ee-compose-quote-content')).toContainText('The Q3 report and the figures are attached.');
+    });
+
+    test('quotes a plain-text original in the HTML part as well', async ({ app, mailbox, page }) => {
+        await app.start();
+        await app.openMessage('Welcome aboard');
+        await app.viewerButton('reply').click();
+        await app.compose.locator('.ee-compose-editor').fill('Thank you!');
+        await app.compose.locator('.ee-compose-send').click();
+        await expect(page.locator('.ee-toast')).toHaveText('Message queued for delivery.');
+
+        const reply = await mailbox.waitForMessage('INBOX', 'Subject: Re: Welcome aboard');
+        const html = decodePart(reply.source, 'text/html');
+        expect(html).toContain('Thank you!');
+        expect(html).toContain('<blockquote');
+        expect(html).toContain('Your account is ready.');
     });
 });
