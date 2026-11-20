@@ -120,6 +120,19 @@ test.describe('compose panel', () => {
         expect(mailbox.messages('Drafts').some(m => m.source.includes('Throwaway'))).toBe(false);
     });
 
+    test('keeps an unsaved message open when the question is dismissed', async ({ app, mailbox, page }) => {
+        await app.start();
+        await page.locator('.ee-sidebar-compose-button').click();
+        await app.compose.locator('[name="subject"]').fill('Still writing');
+        // a host dialog closed without either button answers null
+        await app.answerDialogs(null);
+        await app.compose.locator('[data-action="close"]').click();
+        await expect.poll(async () => (await app.dialogs()).map(d => d.title)).toEqual(['Unsaved message']);
+        await expect(app.compose).toBeVisible();
+        await expect(app.compose.locator('[name="subject"]')).toHaveValue('Still writing');
+        expect(mailbox.messages('Drafts').some(m => m.source.includes('Still writing'))).toBe(false);
+    });
+
     test('asks before replacing an unsaved message with a reply', async ({ app }) => {
         await app.start();
         await app.page.locator('.ee-sidebar-compose-button').click();

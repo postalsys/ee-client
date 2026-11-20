@@ -188,7 +188,13 @@ export interface SubmitDraftOptions {
  * `(message, title, cancelText, okText)`; `cancelText` is `null` for alerts.
  * May be synchronous or asynchronous. Confirm handlers should resolve to a boolean.
  */
-export type DialogMethod = (message: string, title?: string, cancelText?: string | null, okText?: string) => boolean | void | Promise<boolean | void>;
+/** A confirm resolves true for the OK button and false for the cancel button. A host dialog closed without either (its close button, Escape, the backdrop) may resolve null: the client then treats the question as unanswered, which keeps an unsaved message open. */
+export type DialogMethod = (
+    message: string,
+    title?: string,
+    cancelText?: string | null,
+    okText?: string
+) => boolean | null | void | Promise<boolean | null | void>;
 
 export interface EmailEngineClientOptions {
     apiUrl?: string;
