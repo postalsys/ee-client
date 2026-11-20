@@ -35,9 +35,7 @@ class App {
 
     // Waits until a folder listing (not a placeholder or a loading state) is on screen
     async waitForList() {
-        await this.page.waitForFunction(
-            () => window.client.currentFolder && !document.querySelector('.ee-message-list .ee-loading') && document.querySelector('.ee-folder-item')
-        );
+        expect(await this.page.evaluate(() => window.client.ready), 'the first view loaded').toBe(true);
     }
 
     listItem(subject) {

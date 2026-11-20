@@ -130,6 +130,9 @@ new EmailEngineClient(options);
 | `message`            | `string`      | none                    | EmailEngine message ID to open on startup instead of the inbox. The folder holding it is listed next to it (the inbox for Gmail API accounts, which report no folder). Use it to deep-link into one message.                                |
 | `onNavigate`         | `function`    | none                    | Called with `{ path, messageId }` whenever the open folder or message changes, so the host page can keep its address bar in step (`history.replaceState`). `messageId` is `null` when no message is open.                                   |
 | `maxAttachmentSize`  | `number`      | `25 MB`                 | Total size limit, in bytes, of the files attached in the compose form. Files are sent base64 encoded in one JSON request, so keep it under EmailEngine's API body limit.                                                                    |
+| `onMessageSent`      | `function`    | none                    | Called with EmailEngine's response whenever a message, or a stored draft, is queued for delivery, from the UI or `sendMessage()` / `submitDraft()`.                                                                                         |
+| `onDraftSaved`       | `function`    | none                    | Called with EmailEngine's upload response whenever a draft is stored (`saveDraft()`, `updateDraft()` and the compose form).                                                                                                                 |
+| `onError`            | `function`    | none                    | Called with the error and `{ action, description }` whenever a request fails. `action` is `loadFolders`, `loadMessages`, `loadMessage`, `send`, `saveDraft`, `download` or `messageAction`. The UI still shows the failure itself.          |
 
 UI rendering, the compose modal, and dark mode only activate when a `container` is supplied. In a non-browser environment the UI is skipped and the instance behaves as a plain API client.
 
@@ -151,9 +154,13 @@ const client = createEmailEngineClient({
 
 ## Methods
 
-### `loadFolders(): Promise<Folder[]>`
+### `loadFolders({ counters }?): Promise<Folder[]>`
 
-Load all folders/mailboxes for the account. Renders the folder tree when a container is set.
+Load all folders/mailboxes for the account. Renders the folder tree when a container is set. With `counters: true` each folder carries its message and unread counts in `status` (one IMAP STATUS command per folder); the UI asks for them by default, an API-only client only when told to.
+
+### `ready: Promise<boolean>`
+
+Resolves once the first view (the folders and a listing, or the deep-linked `message`) has loaded: `true` when it did, `false` when its requests failed and the panes show why. It never rejects, and resolves `true` at once for an API-only client.
 
 ### `loadMessages(path: string, cursor?: string): Promise<MessageListResponse>`
 
@@ -247,7 +254,7 @@ Clean up the instance and clear the `sess_` token keep-alive interval. Always ca
 - A forward attaches the original's files one by one as references (`prepareResponse()` returns them in `attachments`, and its reference has `forwardAttachments: false`).
 - The compose form is a docked panel without a backdrop (class `ee-compose`, formerly `ee-compose-modal`) and writes HTML through its editor; the message textarea is gone. Hosts that styled or scripted the old modal need updating.
 - The folder list is loaded with `counters=true` to show unread counts.
-- New: `updateDraft()` replaces a stored draft, and `editDraft()` opens one in the compose form.
+- New: `updateDraft()` replaces a stored draft, and `editDraft()` opens one in the compose form; `ready` tells when the first view has loaded; `onMessageSent`, `onDraftSaved` and `onError` report outcomes to the host; `loadFolders({ counters })` asks for unread counts.
 
 ## Browser UI
 

@@ -32,6 +32,7 @@
             window.__dialogs = [];
             window.__dialogAnswers = [];
             window.__navigations = [];
+            window.__events = [];
             window.startClient = options => {
                 const answer = (kind, message, title) => {
                     window.__dialogs.push({ kind, message, title });
@@ -42,6 +43,9 @@
                     confirmMethod: (message, title) => answer('confirm', message, title),
                     alertMethod: (message, title) => answer('alert', message, title),
                     onNavigate: state => window.__navigations.push(state),
+                    onMessageSent: response => window.__events.push({ name: 'messageSent', queueId: response.queueId }),
+                    onDraftSaved: response => window.__events.push({ name: 'draftSaved', path: response.path }),
+                    onError: (error, context) => window.__events.push({ name: 'error', ...context, statusCode: error.statusCode }),
                     ...options
                 });
                 return true;

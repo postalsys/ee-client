@@ -519,6 +519,11 @@ export class EmailEngineClient {
         // Told whenever the open folder or message changes, so a host page can keep its address
         // bar in step (see _notifyNavigate)
         this.onNavigate = typeof options.onNavigate === 'function' ? options.onNavigate : null;
+        // Outcomes a host may want to track (see _emit): a message queued for delivery, a draft
+        // stored, and a request that failed, with what the client was doing at the time
+        for (const name of ['onMessageSent', 'onDraftSaved', 'onError']) {
+            this[name] = typeof options[name] === 'function' ? options[name] : null;
+        }
         const maxAttachmentSize = Number(options.maxAttachmentSize);
         this.maxAttachmentSize = maxAttachmentSize > 0 ? maxAttachmentSize : DEFAULT_MAX_ATTACHMENT_SIZE;
         this.folders = [];
@@ -559,8 +564,11 @@ export class EmailEngineClient {
         const requestedPageSize = savedPageSize ? parseInt(savedPageSize, 10) : parseInt(options.pageSize, 10);
         this.pageSize = requestedPageSize > 0 ? requestedPageSize : 20;
 
+        // Resolves once the first view has loaded: true when it did, false when its requests failed
+        // (the panes then show why). An API-only client has nothing to load.
+        this.ready = Promise.resolve(true);
         if (this.container) {
-            this.init();
+            this.ready = this.init() || this.ready;
         }
 
         // Start keep-alive timer for sess_ tokens
@@ -657,15 +665,15 @@ export class EmailEngineClient {
         return `${this._accountPath()}/attachment/${encodeURIComponent(attachmentId)}`;
     }
 
-    async loadFolders() {
+    // counters adds each folder's message and unread counts, at the cost of a STATUS command per
+    // folder on IMAP. The UI shows them, so it asks by default; an API-only client asks when told to.
+    async loadFolders({ counters = !!this.container } = {}) {
         // Reset the pane to its loading state so a retry after a failure does not
         // keep showing the previous error while the new request is in flight.
         this._setPaneHtml('.ee-folder-tree', '<div class="ee-loading">Loading folders...</div>');
 
         try {
-            // The UI shows unread counts; counters costs a STATUS per folder on IMAP, so an API-only
-            // client does not ask for them
-            const data = await this.apiRequest('GET', `${this._accountPath()}/mailboxes${this.container ? '?counters=true' : ''}`);
+            const data = await this.apiRequest('GET', `${this._accountPath()}/mailboxes${counters ? '?counters=true' : ''}`);
             this.folders = data.mailboxes || [];
             this._folderTreeCache = null;
             if (this.container) {
@@ -674,6 +682,7 @@ export class EmailEngineClient {
             return this.folders;
         } catch (error) {
             console.error('Failed to load folders:', error);
+            this._reportError(error, 'loadFolders', 'Failed to load the folders');
             this._renderPaneError('.ee-folder-tree', 'Folders unavailable', error, () => this._loadInitialView());
             throw error;
         }
@@ -711,6 +720,7 @@ export class EmailEngineClient {
             };
         } catch (error) {
             console.error('Failed to load messages:', error);
+            this._reportError(error, 'loadMessages', 'Failed to load the messages');
             this._renderPaneError(
                 '.ee-message-list',
                 'Messages unavailable',
@@ -771,6 +781,7 @@ export class EmailEngineClient {
             return this.currentMessage;
         } catch (error) {
             console.error('Failed to load message:', error);
+            this._reportError(error, 'loadMessage', 'Failed to load the message');
             // A message that does not exist (deleted, moved, or a link with a mangled ID) is
             // not worth retrying, and the API's validation text means nothing to a reader
             if (error && (error.statusCode === 404 || error.statusCode === 400)) {
@@ -944,9 +955,12 @@ export class EmailEngineClient {
     async sendMessage(message) {
         assertMessageObject(message, 'sendMessage');
         try {
-            return await this.apiRequest('POST', `${this._accountPath()}/submit`, this._messagePayload(message));
+            const response = await this.apiRequest('POST', `${this._accountPath()}/submit`, this._messagePayload(message));
+            this._emit('onMessageSent', response);
+            return response;
         } catch (error) {
             console.error('Failed to send message:', error);
+            this._reportError(error, 'send', 'Failed to send the message');
             throw error;
         }
     }
@@ -985,9 +999,12 @@ export class EmailEngineClient {
                 // Non-fatal: the draft is saved without a From header
             }
 
-            return await this.apiRequest('POST', `${this._accountPath()}/message`, messageData);
+            const response = await this.apiRequest('POST', `${this._accountPath()}/message`, messageData);
+            this._emit('onDraftSaved', response);
+            return response;
         } catch (error) {
             console.error('Failed to save draft:', error);
+            this._reportError(error, 'saveDraft', 'Failed to save the draft');
             throw error;
         }
     }
@@ -1091,24 +1108,39 @@ export class EmailEngineClient {
         return { to, cc, subject: prefixSubject(msg.subject, 'Re'), reference: { message: msg.id, action: 'reply', inline: true } };
     }
 
-    // Tells the host which folder and message are open. A host error must not break the client.
-    _notifyNavigate() {
-        if (!this.onNavigate || this._destroyed) {
+    // Calls a host callback by its option name. A host error must not break the client.
+    _emit(name, ...args) {
+        const handler = this[name];
+        if (typeof handler !== 'function' || this._destroyed) {
             return;
         }
         try {
-            this.onNavigate({ path: this.currentFolder, messageId: this.currentMessage ? this.currentMessage.id : null });
+            handler(...args);
         } catch (error) {
-            console.error('onNavigate handler failed:', error);
+            console.error(`${name} handler failed:`, error);
         }
+    }
+
+    // Tells the host which folder and message are open
+    _notifyNavigate() {
+        this._emit('onNavigate', { path: this.currentFolder, messageId: this.currentMessage ? this.currentMessage.id : null });
+    }
+
+    // Tells the host a request failed: action names what the client was doing ('loadFolders',
+    // 'loadMessages', 'loadMessage', 'send', 'saveDraft', 'download' or 'messageAction'), and
+    // description says it in words
+    _reportError(error, action, description) {
+        this._emit('onError', error, { action, description });
     }
 
     async submitDraft(messageId, options = null) {
         try {
             const response = await this.apiRequest('POST', this._messagePath(messageId, '/submit'), options);
+            this._emit('onMessageSent', response);
             return response;
         } catch (error) {
             console.error('Failed to submit draft:', error);
+            this._reportError(error, 'send', 'Failed to send the draft');
             throw error;
         }
     }
@@ -1251,6 +1283,7 @@ export class EmailEngineClient {
     // nothing having happened. Say so instead.
     _alertActionFailed(error, fallback) {
         console.error(`${fallback}:`, error);
+        this._reportError(error, 'messageAction', fallback);
         return this.alertMethod(this._errorMessage(error, fallback), 'Error', null, 'OK');
     }
 
@@ -1489,6 +1522,7 @@ export class EmailEngineClient {
             this._saveBlob(blob, filename);
         } catch (error) {
             console.error('Failed to download attachment:', error);
+            this._reportError(error, 'download', 'Failed to download the attachment');
             this.alertMethod(this._errorMessage(error, 'Failed to download attachment. Please try again.'), 'Download Error', null, 'OK');
         }
     }
@@ -1509,6 +1543,7 @@ export class EmailEngineClient {
             this._saveBlob(blob, filename);
         } catch (error) {
             console.error('Failed to download original message:', error);
+            this._reportError(error, 'download', 'Failed to download the original message');
             this.alertMethod(this._errorMessage(error, 'Failed to download original message. Please try again.'), 'Download Error', null, 'OK');
         }
     }
@@ -4729,13 +4764,14 @@ export class EmailEngineClient {
             toggleBtn.addEventListener('click', () => this.toggleDarkMode());
         }
 
-        this._loadInitialView();
+        return this._loadInitialView();
     }
 
     // Load the folder list and open the account's inbox. Used on startup and by
     // the Retry button that loadFolders renders when the request fails; both
     // failure paths already put an error panel in the UI, so the rejection is
     // logged and swallowed here rather than surfacing as an unhandled rejection.
+    // Resolves whether the view loaded.
     _loadInitialView() {
         // Drop whatever a previous attempt left here; loadFolders and loadMessages
         // paint their own loading states from this point on.
@@ -4756,10 +4792,14 @@ export class EmailEngineClient {
                 this._renderPaneError('.ee-message-list', 'Folders unavailable', error, () => this._loadInitialView());
                 throw error;
             })
-            .then(async () => this._listFolderOf(await message))
+            .then(async () => {
+                await this._listFolderOf(await message);
+                return true;
+            })
             .catch(error => {
                 // Both loadFolders and loadMessages have already rendered a panel
                 console.error('Failed to load the initial view:', error);
+                return false;
             });
     }
 

@@ -212,6 +212,49 @@ describe('compose helpers', () => {
         assert.deepEqual(await client.updateDraft('old', { subject: 'v2' }), { id: 'new', path: 'Drafts' });
     });
 
+    it('tells the host about sent messages, saved drafts and failures, and survives a failing handler', async () => {
+        const events = [];
+        const host = new EmailEngineClient({
+            apiUrl: 'http://ee.test',
+            account: 'acc',
+            onMessageSent: response => {
+                events.push(['sent', response.queueId]);
+                throw new Error('host bug');
+            },
+            onDraftSaved: response => events.push(['draft', response.path]),
+            onError: (error, context) => events.push(['error', context.action, context.description, error.statusCode])
+        });
+        host.folders = [{ path: 'Drafts', specialUse: '\\Drafts' }];
+        fetchMock.mock.mockImplementation(async url => jsonResponse(url.endsWith('/acc') ? {} : { queueId: 'q1', path: 'Drafts' }));
+
+        // a throwing handler does not turn a delivered message into a failure
+        assert.deepEqual(await host.sendMessage({ to: 'a@example.com', subject: 'S', text: 'T' }), { queueId: 'q1', path: 'Drafts' });
+        await host.saveDraft({ subject: 'Later' });
+
+        fetchMock.mock.mockImplementation(async () => ({ ok: false, status: 503, statusText: 'Unavailable', json: async () => ({ message: 'Not yet' }) }));
+        await assert.rejects(() => host.sendMessage({ to: 'a@example.com' }));
+
+        assert.deepEqual(events, [
+            ['sent', 'q1'],
+            ['draft', 'Drafts'],
+            ['error', 'send', 'Failed to send the message', 503]
+        ]);
+        host.destroy();
+    });
+
+    it('is ready at once without the UI', async () => {
+        assert.equal(await client.ready, true);
+    });
+
+    it('asks for folder counters when told to, and not by default without the UI', async () => {
+        await client.loadFolders();
+        await client.loadFolders({ counters: true });
+        assert.deepEqual(
+            fetchMock.mock.calls.map(call => call.arguments[0]),
+            ['http://ee.test/v1/account/acc/mailboxes', 'http://ee.test/v1/account/acc/mailboxes?counters=true']
+        );
+    });
+
     it('marks replied and forwarded messages, a forward only as forwarded', () => {
         assert.equal(client._responseMarkers({ flags: ['\\Seen'] }), '');
         assert.match(client._responseMarkers({ flags: ['\\Answered'] }), /aria-label="Replied"/);

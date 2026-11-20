@@ -40,6 +40,48 @@ test.describe('host integration', () => {
         await expect(page.locator('.ee-message-list .ee-pane-title')).toHaveText('Drafts');
     });
 
+    test('ready resolves once the first view has loaded', async ({ app, page }) => {
+        await app.start({}, { waitForList: false });
+        expect(await page.evaluate(() => window.client.ready)).toBe(true);
+        await expect(app.listItem('Quarterly report')).toBeVisible();
+    });
+
+    test('ready resolves false when the first view could not load, and onError says why', async ({ app, page }) => {
+        await app.start({ apiUrl: 'http://127.0.0.1:9' }, { waitForList: false });
+        expect(await page.evaluate(() => window.client.ready)).toBe(false);
+        expect(await page.evaluate(() => window.__events)).toContainEqual(
+            expect.objectContaining({ name: 'error', action: 'loadFolders', description: 'Failed to load the folders' })
+        );
+    });
+
+    test('tells the host about sent messages, saved drafts and failed requests', async ({ app, page }) => {
+        await app.start();
+        await page.locator('.ee-sidebar-compose-button').click();
+        await app.compose.locator('[name="to"]').fill('jane@example.com');
+        await app.compose.locator('[name="subject"]').fill('Events');
+        await app.compose.locator('.ee-compose-editor').fill('Hello');
+        await app.compose.locator('.ee-compose-save-draft').click();
+        await expect(page.locator('.ee-toast')).toHaveText('Draft saved.');
+
+        await page.locator('.ee-sidebar-compose-button').click();
+        await app.compose.locator('[name="to"]').fill('jane@example.com');
+        await app.compose.locator('.ee-compose-editor').fill('Hello again');
+        await app.compose.locator('.ee-compose-send').click();
+        await expect(page.locator('.ee-toast')).toHaveText('Message queued for delivery.');
+
+        await page.route('**/messages?**', route =>
+            route.fulfill({ status: 500, contentType: 'application/json', body: '{"statusCode":500,"message":"Boom"}' })
+        );
+        await app.folder('Archive').click();
+        await expect(page.locator('.ee-message-list .ee-error')).toBeVisible();
+
+        const events = await page.evaluate(() => window.__events);
+        expect(events.map(event => event.name)).toEqual(['draftSaved', 'messageSent', 'error']);
+        expect(events[0].path).toBe('Drafts');
+        expect(events[1].queueId).toBeTruthy();
+        expect(events[2]).toMatchObject({ action: 'loadMessages', statusCode: 500 });
+    });
+
     test('shows notices from the host', async ({ app, page }) => {
         await app.start();
         await page.evaluate(() => window.client.notify('Settings saved.'));

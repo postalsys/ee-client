@@ -211,6 +211,19 @@ export interface EmailEngineClientOptions {
     onNavigate?: (state: NavigationState) => void;
     /** Total size limit for files attached in the compose form, in bytes (default 25 MB) */
     maxAttachmentSize?: number;
+    /** Called with EmailEngine's response whenever a message or a stored draft is queued for delivery */
+    onMessageSent?: (response: any) => void;
+    /** Called with EmailEngine's upload response whenever a draft is stored */
+    onDraftSaved?: (response: any) => void;
+    /** Called whenever a request fails, with what the client was doing */
+    onError?: (error: Error, context: ErrorContext) => void;
+}
+
+/** What `onError` is told about a failed request */
+export interface ErrorContext {
+    action: 'loadFolders' | 'loadMessages' | 'loadMessage' | 'send' | 'saveDraft' | 'download' | 'messageAction';
+    /** The failure in words, e.g. "Failed to load the folders" */
+    description: string;
 }
 
 export declare class EmailEngineClient {
@@ -232,11 +245,18 @@ export declare class EmailEngineClient {
     nextPageCursor: string | null;
     prevPageCursor: string | null;
     listPosition: ListPosition | null;
+    /**
+     * Resolves once the first view (folders and a listing, or a deep-linked message) has loaded:
+     * true when it did, false when its requests failed and the panes show why. Resolves true at
+     * once for an API-only client.
+     */
+    ready: Promise<boolean>;
 
     constructor(options?: EmailEngineClientOptions);
 
     apiRequest(method: string, endpoint: string, data?: any): Promise<any>;
-    loadFolders(): Promise<Folder[]>;
+    /** Lists the folders; counters adds message and unread counts (default: true when the UI is rendered) */
+    loadFolders(options?: { counters?: boolean }): Promise<Folder[]>;
     /** Loads a page of a folder's message list; the open message stays open */
     loadMessages(path: string, cursor?: string | null): Promise<MessageListResponse>;
     /** Closes the open message and lists another folder */
