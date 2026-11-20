@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.0.0](https://github.com/postalsys/ee-client/compare/v1.11.2...v2.0.0) (2026-11-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* sendMessage and saveDraft take one message object instead of the to, subject, text and options arguments, compose returns a promise, and the compose modal is replaced by a docked panel with a rich text editor. See Upgrading from 1.x in the README.
+
+### Features
+
+* host events, a ready promise and folder counters on request ([c60ad1c](https://github.com/postalsys/ee-client/commit/c60ad1c68acfbbca5558d2cec12b7aa580ec2799))
+* rich text compose in a docked panel, per-file forwarding and draft editing ([8f4f35e](https://github.com/postalsys/ee-client/commit/8f4f35e44c8da2de6d9277c48504ca047daaae55))
+* unread folder counts, a paging footer and keyboard access in the message browser ([6025e47](https://github.com/postalsys/ee-client/commit/6025e47031c99073410c64c56634185e8edab19d))
+
+
+### Bug Fixes
+
+* leave the quote of a plain-text original to EmailEngine ([731489a](https://github.com/postalsys/ee-client/commit/731489a7718eee330e25018e4db0db9adbcc6ffd))
+* report each failure to the host once, from the method that failed ([82e7404](https://github.com/postalsys/ee-client/commit/82e7404b179a9f65619771d599b986a6c9346a18))
+
 ## [1.11.2](https://github.com/postalsys/ee-client/compare/v1.11.1...v1.11.2) (2026-11-20)
 
 
