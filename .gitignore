@@ -126,3 +126,6 @@ Thumbs.db
 
 .claude
 .vscode
+# Playwright output
+test-results/
+playwright-report/

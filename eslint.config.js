@@ -76,6 +76,13 @@ export default [
         }
     },
     {
+        // E2E specs pass callbacks to page.evaluate that run in the browser, so they see browser globals too
+        files: ['test/e2e/**'],
+        languageOptions: {
+            globals: { ...globals.node, ...globals.browser }
+        }
+    },
+    {
         // Kept from the previous config: this code renders untrusted email content, so string-to-code sinks stay banned
         files: ['**/*.js'],
         rules: {

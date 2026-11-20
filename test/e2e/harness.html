@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>ee-client e2e harness</title>
+        <style>
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+                font-family: system-ui, sans-serif;
+            }
+            #app {
+                height: 100vh;
+            }
+            /* A host utility class with the same name a message uses: it must not reach the message body */
+            .fixed.inset-0 {
+                position: fixed;
+                inset: 0;
+                background: red;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app"></div>
+        <script type="module">
+            import { EmailEngineClient } from '/index.js';
+
+            // Started by the test with page.evaluate, so each test picks its own options. Dialogs
+            // are recorded and answered from window.__dialogAnswers (true when nothing is queued).
+            window.__dialogs = [];
+            window.__dialogAnswers = [];
+            window.__navigations = [];
+            window.startClient = options => {
+                const answer = (kind, message, title) => {
+                    window.__dialogs.push({ kind, message, title });
+                    return Promise.resolve(window.__dialogAnswers.length ? window.__dialogAnswers.shift() : true);
+                };
+                window.client = new EmailEngineClient({
+                    container: document.getElementById('app'),
+                    confirmMethod: (message, title) => answer('confirm', message, title),
+                    alertMethod: (message, title) => answer('alert', message, title),
+                    onNavigate: state => window.__navigations.push(state),
+                    ...options
+                });
+                return true;
+            };
+            window.__harnessReady = true;
+        </script>
+    </body>
+</html>

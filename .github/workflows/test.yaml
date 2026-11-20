@@ -41,3 +41,29 @@ jobs:
             - name: Check the static copy EmailEngine serves
               if: matrix.node-version != '20.x'
               run: npm run test:cjs
+
+    # The client in Chromium against EmailEngine (Docker, unlicensed) and imapkit mail servers that
+    # run inside the test process. Needs no secrets and no outside mail service.
+    e2e:
+        if: "${{ !startsWith(github.event.head_commit.message, 'chore(master): release') }}"
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v7
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22.x
+                  cache: npm
+            - run: npm ci
+            - run: npx playwright install --with-deps chromium
+            - run: npm run test:e2e
+              env:
+                  CI: true
+            - uses: actions/upload-artifact@v7
+              if: ${{ !cancelled() }}
+              with:
+                  name: playwright-report
+                  path: |
+                      playwright-report/
+                      test-results/
+                  retention-days: 14
