@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.1](https://github.com/postalsys/ee-client/compare/v2.0.0...v2.0.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* keep an unsaved message open when the save question is dismissed ([8bda596](https://github.com/postalsys/ee-client/commit/8bda59694f035d2349d68c246cce279675d511c5))
+* open the first view before asking for the folder unread counts ([da6cf8d](https://github.com/postalsys/ee-client/commit/da6cf8d0be32f83532da9fab384bcf3276f06270))
+
 ## [2.0.0](https://github.com/postalsys/ee-client/compare/v1.11.2...v2.0.0) (2026-11-20)
 
 
