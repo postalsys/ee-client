@@ -23,6 +23,25 @@ test.describe('folders', () => {
         await expect(count).toHaveText('5');
     });
 
+    test('asks for the unread counts only once the first view is up', async ({ app, page }) => {
+        // a STATUS command per folder shares the IMAP connection with the listing, so asking
+        // for the counts first would make the inbox wait behind them
+        const requests = [];
+        page.on('request', request => {
+            const url = new URL(request.url());
+            const match = url.pathname.match(/^\/v1\/account\/[^/]+(\/.*)$/);
+            if (match) {
+                requests.push(match[1] + url.search);
+            }
+        });
+        await app.start();
+        await expect(app.folder('Inbox').locator('.ee-folder-count')).toHaveText('5');
+        expect(requests.filter(path => path.startsWith('/mailboxes'))).toEqual(['/mailboxes', '/mailboxes?counters=true']);
+        const listing = requests.findIndex(path => path.startsWith('/messages'));
+        expect(listing).toBeGreaterThan(-1);
+        expect(requests.indexOf('/mailboxes?counters=true')).toBeGreaterThan(listing);
+    });
+
     test('opens folders from the keyboard', async ({ app, page }) => {
         await app.start();
         await app.folder('Drafts').locator('.ee-folder-content').focus();
