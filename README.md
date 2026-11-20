@@ -280,7 +280,7 @@ When opening a message the client scrolls the page only if its top is scrolled o
 
 On wide layouts the Compose button sits at the top of the folder pane; in the one-pane layout it is a floating button. Problems with a message (no recipient, an address that is not one, a send the server refused) are shown inside the compose form next to its buttons, and the form keeps what was typed. Outcomes that need no answer ("Message queued for delivery.", "Draft saved.", "Message moved to Trash.") appear as a short notice at the bottom of the client, which `notify(message)` can show from the host too. `alertMethod` is used for failures outside the form.
 
-The editor keeps paragraphs, bold, italic, underline, lists, quotes and `http`, `https` and `mailto` links. Pasted content and reopened drafts are filtered down to those; anything else keeps only its text. A reopened draft of a reply keeps its quote as editable text. When the message being answered or forwarded has no HTML part of its own, the client adds the quote to the HTML part itself, since EmailEngine quotes only the original's HTML into it.
+The editor keeps paragraphs, bold, italic, underline, lists, quotes and `http`, `https` and `mailto` links. Pasted content and reopened drafts are filtered down to those; anything else keeps only its text. A reopened draft of a reply keeps its quote as editable text. A reply to or forward of a message that has no HTML part of its own is quoted into the HTML part by EmailEngine versions after 2.89.0; older versions quote it into the plain text part only.
 
 ### Dark mode and styled messages
 

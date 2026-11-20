@@ -21,6 +21,7 @@ export default async function globalSetup() {
     process.env.EE_E2E_API_URL = stack.apiUrl;
     process.env.EE_E2E_TOKEN = stack.token;
     process.env.EE_E2E_CONTAINER = stack.containers[0];
+    process.env.EE_E2E_VERSION = stack.version || '';
 
     return async () => {
         if (process.env.EE_E2E_LOGS) {

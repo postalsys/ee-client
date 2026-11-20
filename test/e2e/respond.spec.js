@@ -2,6 +2,20 @@ import { test, expect } from './fixtures.js';
 import { waitFor } from './mailbox.js';
 import { decodePart, headerOf } from './mime.js';
 
+// Whether a dotted version is above another, numerically per part
+function versionAbove(version, floor) {
+    const a = String(version || '0')
+        .split('.')
+        .map(Number);
+    const b = floor.split('.').map(Number);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        if ((a[i] || 0) !== (b[i] || 0)) {
+            return (a[i] || 0) > (b[i] || 0);
+        }
+    }
+    return false;
+}
+
 test.describe('reply and forward', () => {
     test('replies to the Reply-To address with threading headers', async ({ app, mailbox, page }) => {
         await app.start();
@@ -91,7 +105,13 @@ test.describe('reply and forward', () => {
         await expect(app.compose.locator('.ee-compose-quote-content')).toContainText('The Q3 report and the figures are attached.');
     });
 
+    // EmailEngine 2.89.0 and older quote only an HTML original into the HTML part. Runs against a
+    // later version, or any image when EE_E2E_PLAIN_QUOTE is set (a local build of a fix branch).
     test('quotes a plain-text original in the HTML part as well', async ({ app, mailbox, page }) => {
+        test.skip(
+            !process.env.EE_E2E_PLAIN_QUOTE && !versionAbove(process.env.EE_E2E_VERSION, '2.89.0'),
+            `EmailEngine ${process.env.EE_E2E_VERSION} does not quote it`
+        );
         await app.start();
         await app.openMessage('Welcome aboard');
         await app.viewerButton('reply').click();

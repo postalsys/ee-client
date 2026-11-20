@@ -4129,29 +4129,6 @@ export class EmailEngineClient {
         `;
     }
 
-    // EmailEngine quotes the original's HTML part only, so a reply to or a forward of a plain-text
-    // message would go out with no quote in its HTML part. The client adds that quote itself, built
-    // from the text the server quotes in the plain part.
-    _plainQuoteHtml(original, mode) {
-        const plain = (original.text && original.text.plain) || '';
-        const cite = 'type="cite" style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex"';
-        const sender = this.formatAddressList(original.from);
-        const date = this.formatFullDate(original.date);
-        if (mode === 'forward') {
-            const rows = [
-                ['From', sender],
-                ['Subject', original.subject || ''],
-                ['Date', date],
-                ['To', this.formatAddressList(original.to)]
-            ]
-                .filter(([, value]) => value)
-                .map(([label, value]) => `<div><b>${label}:</b> ${this.escapeHtml(value)}</div>`)
-                .join('');
-            return `<br><blockquote ${cite}><div>Begin forwarded message:</div><br>${rows}<br>${textToEditorHtml(plain)}</blockquote>`;
-        }
-        return `<br><div>On ${this.escapeHtml(date)}, ${this.escapeHtml(sender)} wrote:</div><blockquote ${cite}>${textToEditorHtml(plain)}</blockquote>`;
-    }
-
     // Shows the Cc and Bcc fields named true and hides the rest; the link offers whichever is hidden
     _showCopyFields(show) {
         const { form } = this._compose.els;
@@ -4280,7 +4257,7 @@ export class EmailEngineClient {
     // is a forward.
     _readComposeForm(requireMessage) {
         const { form, editor } = this._compose.els;
-        const { reference, original, headers, mode } = this._compose;
+        const { reference, headers } = this._compose;
         const fields = {};
         const invalid = [];
         for (const key of ['to', 'cc', 'bcc']) {
@@ -4289,11 +4266,7 @@ export class EmailEngineClient {
         }
 
         const text = editorText(editor);
-        let html = text ? sanitizeEditorHtml(editor.innerHTML) : '';
-        const encodedSize = original && original.text && original.text.encodedSize;
-        if (html && reference && reference.inline && encodedSize && !encodedSize.html) {
-            html += this._plainQuoteHtml(original, mode);
-        }
+        const html = text ? sanitizeEditorHtml(editor.innerHTML) : '';
 
         const message = { to: fields.to, cc: fields.cc, bcc: fields.bcc, subject: form.elements.subject.value.trim(), text, html, reference, headers };
         const isForward = !!reference && reference.action === 'forward';

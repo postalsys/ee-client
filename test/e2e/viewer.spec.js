@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures.js';
-import { XSS } from './seed.js';
+import { ATTACHMENTS, XSS } from './seed.js';
 
 const body = page => page.locator('.ee-message-body');
 
@@ -22,7 +22,12 @@ test.describe('message viewer', () => {
         await expect(page.locator('.ee-attachments-title')).toHaveText('2 attachments');
         await expect(page.locator('.ee-attachment-name')).toHaveText(['q3-report.pdf', 'figures.csv']);
         await expect(page.locator('.ee-attachment-type')).toHaveText(['PDF', 'CSV']);
-        await expect(page.locator('.ee-attachment-size')).toHaveText(['33 Bytes', '24 Bytes']);
+        // EmailEngine computes the file size from the base64 part, at most 2 bytes over (the padding)
+        const sizes = (await page.locator('.ee-attachment-size').allTextContents()).map(value => parseInt(value, 10));
+        [ATTACHMENTS.report, ATTACHMENTS.data].forEach((att, i) => {
+            expect(sizes[i]).toBeGreaterThanOrEqual(att.content.length);
+            expect(sizes[i]).toBeLessThanOrEqual(att.content.length + 2);
+        });
     });
 
     test('does not list images the body shows in place as attachments', async ({ app, page }) => {

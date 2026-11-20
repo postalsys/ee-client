@@ -110,8 +110,9 @@ export async function startStack({ corsOrigin }) {
     }
     await eeCli(ee, ['password', '-p', ADMIN_PASSWORD]);
     await waitForApi(apiUrl, token);
+    const stats = await (await fetch(`${apiUrl}/v1/stats`, { headers: { Authorization: `Bearer ${token}` } })).json();
 
-    return { apiUrl, token, network, containers: [ee, redis] };
+    return { apiUrl, token, version: stats.version, network, containers: [ee, redis] };
 }
 
 export async function stopStack(stack) {
