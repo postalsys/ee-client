@@ -48,6 +48,26 @@ describe('compose helpers', () => {
         assert.deepEqual(client.parseAddressList(null), []);
     });
 
+    it('parses a long run of "<" without a closing ">" in linear time', () => {
+        const entry = '<='.repeat(50000);
+        const started = Date.now();
+        assert.deepEqual(client.parseAddressList(entry), [{ address: entry }]);
+        assert.ok(Date.now() - started < 1000, `took ${Date.now() - started}ms`);
+    });
+
+    it('splits name and address the way the "Name <address>" pattern did', () => {
+        const pattern = /^(.*)<([^>]*)>$/;
+        for (const entry of ['a <b> <c@d>', 'a <b>c <d@e>', '<x@y>', 'x <y', 'x <y> z', 'a > <b@c>', 'a <b>>', 'a\nb <c@d>', '"" <a@b>']) {
+            const match = entry.match(pattern);
+            let expected = { address: entry.trim() };
+            if (match) {
+                const name = match[1].trim().replace(/^"(.*)"$/, '$1');
+                expected = name ? { name, address: match[2].trim() } : { address: match[2].trim() };
+            }
+            assert.deepEqual(client.parseAddressList(entry), [expected], entry);
+        }
+    });
+
     it('formats address entries back into a field that parses to the same list', () => {
         const list = [{ name: 'Doe, John', address: 'john@example.com' }, { address: 'jane@example.com' }, { name: 'Say "hi"', address: 'x@example.com' }];
         const field = client.formatAddressList(list);
